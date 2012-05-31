@@ -1059,7 +1059,7 @@ out_prev:
           cause4 = cache_inode_err_str(cache_status);
         }
 
-      LogCrit(COMPONENT_STATE,
+      LogDebug(COMPONENT_STATE,
                "NFS4 OPEN returning %s for %s%s%s%s",
                nfsstat4_to_str(res_OPEN4.status),
                cause, cause2, cause3, cause4);
