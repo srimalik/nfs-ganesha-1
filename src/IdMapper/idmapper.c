@@ -783,7 +783,12 @@ int utf82uid(utf8string * utf8str, uid_t * Uid)
       return -1;
     }
 
-  utf82str(buff, sizeof(buff), utf8str);
+  if(utf82str(buff, sizeof(buff), utf8str))
+    {
+      *Uid = -1;                /* Nobody */
+      LogCrit(COMPONENT_IDMAPPER,"utf82uid: Invalid utf8 string in user name");
+      return -1;
+    }
 
 #ifndef _USE_NFSIDMAP
   /* User is shown as a string 'user@domain', remove it if libnfsidmap is not used */
@@ -835,7 +840,12 @@ int utf82gid(utf8string * utf8str, gid_t * Gid)
       return 0;
     }
 
-  utf82str(buff, sizeof(buff), utf8str);
+  if(utf82str(buff, sizeof(buff), utf8str))
+  {
+    *Gid = -1;                /* Nobody */
+    LogCrit(COMPONENT_IDMAPPER, "Invalid UTF8 string in group name");
+    return -1;
+  }
 
 #ifndef _USE_NFSIDMAP
   /* Group is shown as a string 'group@domain' , remove it if libnfsidmap is not used */

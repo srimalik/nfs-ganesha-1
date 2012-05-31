@@ -168,6 +168,7 @@ int nfs4_op_link(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
                                  &newname))) != CACHE_INODE_SUCCESS)
     {
       res_LINK4.status = nfs4_Errno(cache_status);
+      LogCrit(COMPONENT_NFS_V4, "NFS4_OP_LINK: Invalid UTF8 string in newname");
       return res_LINK4.status;
     }
 

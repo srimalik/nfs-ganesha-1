@@ -1521,7 +1521,11 @@ int nfs4_op_lookup_pseudo(struct nfs_argop4 *op,
   resp->resop = NFS4_OP_LOOKUP;
 
   /* UTF8 strings may not end with \0, but they carry their length */
-  utf82str(name, sizeof(name), &arg_LOOKUP4.objname);
+  if(utf82str(name, sizeof(name), &arg_LOOKUP4.objname))
+  {
+    res_LOOKUP4.status = NFS4ERR_INVAL;
+    return res_LOOKUP4.status;
+  }
 
   /* Get the pseudo fs entry related to the file handle */
   if(!nfs4_FhandleToPseudo(&(data->currentFH), data->pseudofs, &psfsentry))

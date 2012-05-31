@@ -168,7 +168,8 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                 ((fsal_buffdesc_t *) & arg_RENAME4.oldname,
                                  &oldname))) != CACHE_INODE_SUCCESS)
     {
-      res_RENAME4.status = NFS4ERR_INVAL;
+      res_RENAME4.status = nfs4_Errno(cache_status);
+      LogCrit(COMPONENT_NFS_V4, "NFS4_OP_RENAME: Invalid UTF8 string in oldname");
       return res_RENAME4.status;
     }
 
@@ -177,11 +178,12 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                 ((fsal_buffdesc_t *) & arg_RENAME4.newname,
                                  &newname))) != CACHE_INODE_SUCCESS)
     {
-      res_RENAME4.status = NFS4ERR_INVAL;
+      res_RENAME4.status = nfs4_Errno(cache_status);
+      LogCrit(COMPONENT_NFS_V4, "NFS4_OP_RENAME: Invalid UTF8 string in newname");
       return res_RENAME4.status;
     }
 
-  /* Sanuty check: never rename to '.' or '..' */
+  /* Sanity check: never rename to '.' or '..' */
   if(!FSAL_namecmp(&newname, (fsal_name_t *) & FSAL_DOT)
      || !FSAL_namecmp(&newname, (fsal_name_t *) & FSAL_DOT_DOT))
     {

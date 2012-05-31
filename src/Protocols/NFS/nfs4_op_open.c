@@ -379,12 +379,14 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
         }
 
       /* Check if filename is correct */
+
       if((cache_status =
           cache_inode_error_convert(FSAL_buffdesc2name
                                     ((fsal_buffdesc_t *) & arg_OPEN4.claim.open_claim4_u.
                                      file, &filename))) != CACHE_INODE_SUCCESS)
         {
           res_OPEN4.status = nfs4_Errno(cache_status);
+          LogCrit(COMPONENT_NFS_V4, "NFS4_OP_OPEN: Invalid UTF8 string in file"); 
           cause2 = " FSAL_buffdesc2name";
           goto out;
         }
@@ -1057,7 +1059,7 @@ out_prev:
           cause4 = cache_inode_err_str(cache_status);
         }
 
-      LogDebug(COMPONENT_STATE,
+      LogCrit(COMPONENT_STATE,
                "NFS4 OPEN returning %s for %s%s%s%s",
                nfsstat4_to_str(res_OPEN4.status),
                cause, cause2, cause3, cause4);

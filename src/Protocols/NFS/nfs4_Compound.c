@@ -311,12 +311,6 @@ int nfs4_Compound(nfs_arg_t * parg /* IN     */ ,
   memcpy(&(pres->res_compound4.tag), &(parg->arg_compound4.tag),
          sizeof(parg->arg_compound4.tag));
 
-  if(utf8dup(&(pres->res_compound4.tag), &(parg->arg_compound4.tag)) == -1)
-    {
-      LogCrit(COMPONENT_NFS_V4, "Unable to duplicate tag into response");
-      return NFS_REQ_DROP;
-    }
-
   /* Allocating the reply nfs_resop4 */
   if((pres->res_compound4.resarray.resarray_val =
       (struct nfs_resop4 *)Mem_Alloc((COMPOUND4_ARRAY.argarray_len) *
@@ -324,6 +318,22 @@ int nfs4_Compound(nfs_arg_t * parg /* IN     */ ,
     {
       return NFS_REQ_DROP;
     }
+
+  if(FSAL_checkutf8(pres->res_compound4.tag.utf8string_val, pres->res_compound4.tag.utf8string_len))
+  {
+    status = NFS4ERR_INVAL;
+    pres->res_compound4.resarray.resarray_val[0].nfs_resop4_u.opexchange_id.eir_status = status;
+    pres->res_compound4.status = status;
+    LogCrit(COMPONENT_NFS_V4, "Invalid tag");
+    return NFS_REQ_OK;
+  }
+
+  if(utf8dup(&(pres->res_compound4.tag), &(parg->arg_compound4.tag)) == -1)
+    {
+      LogCrit(COMPONENT_NFS_V4, "Unable to duplicate tag into response");
+      return NFS_REQ_DROP;
+    }
+
 
   if(isDebug(COMPONENT_NFS_V4) && pres->res_compound4.tag.utf8string_len > 0)
     {

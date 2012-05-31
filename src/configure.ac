@@ -330,6 +330,8 @@ if test "$enable_stat_exporter" == "yes"; then
 	AC_DEFINE(_USE_STAT_EXPORTER,1,[export GANESHA NFS request statistics with a dedicated thread and socket])
 fi
 
+# enable UTF8 checks
+GA_ENABLE_FLAG( [utf8-checks],       [enable UTF8 check for NFS v4 operations],           [-D_ENABLE_UTF8_CHECK] )
 
 GA_ENABLE_AM_CONDITION([efence],[link with efence memory debug library],[USE_EFENCE])
 

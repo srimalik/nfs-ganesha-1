@@ -169,6 +169,15 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
       return res_CREATE4.status;
     }
 
+  if((cache_status =
+      cache_inode_error_convert(FSAL_buffdesc2name ((fsal_buffdesc_t *) & arg_CREATE4.objname
+                                     , &name))) != CACHE_INODE_SUCCESS)
+    {
+      res_CREATE4.status = nfs4_Errno(cache_status);
+      LogCrit(COMPONENT_NFS_V4, "NFS4_OP_CREATE: Invalid UTF8 string in objname"); 
+      return res_CREATE4.status;
+    }
+
   if(utf82str(name.name, sizeof(name.name), &arg_CREATE4.objname) == -1)
     {
       res_CREATE4.status = NFS4ERR_INVAL;
@@ -246,11 +255,12 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
         }
       else
         {
-          if(utf82str
-             (create_arg.link_content.path, sizeof(create_arg.link_content.path),
-              &arg_CREATE4.objtype.createtype4_u.linkdata) == -1)
+          if((cache_status =
+              cache_inode_error_convert(FSAL_buffdesc2path ((fsal_buffdesc_t *) & arg_CREATE4.objtype.createtype4_u.linkdata
+                                                            , &create_arg.link_content))) != CACHE_INODE_SUCCESS)
             {
-              res_CREATE4.status = NFS4ERR_INVAL;
+              res_CREATE4.status = nfs4_Errno(cache_status);
+              LogCrit(COMPONENT_NFS_V4, "NFS4_OP_CREATE: Invalid UTF8 string in linkdata");
               return res_CREATE4.status;
             }
           create_arg.link_content.len = strlen(create_arg.link_content.path);

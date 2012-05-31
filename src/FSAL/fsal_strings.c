@@ -16,6 +16,9 @@
 
 #include "fsal.h"
 #include <string.h>
+#include <iconv.h>
+#include <stdlib.h>
+#include <errno.h>
 
 /**
  * @defgroup FSALNameFunctions Name handling functions.
@@ -24,6 +27,41 @@
  * 
  * @{
  */
+
+/**
+ * FSAL_checkutf8 :
+ * converts a char * to an fsal_name_t.
+ * 
+ * \param istr (in, char *)
+ *        buffer containing seq of bytes.
+ * \param isize (in, size_t)
+ *        Size of the buffer.   
+ * \return :
+ *      - int
+ */
+
+int FSAL_checkutf8(char *istr, size_t isize)
+{
+#ifdef _ENABLE_UTF8_CHECK
+    size_t osize = isize;
+    int error;
+    iconv_t ichandle = iconv_open("UTF8","UTF8");
+    char *ostr = malloc(osize);
+
+    errno = 0;
+    if(iconv(ichandle, &istr, &isize, &ostr, &osize) == (size_t) -1);
+    {
+        error = errno;
+        if(!error)
+            return(0);
+        //LogCrit(COMPONENT_NFS_V4, "error = %s int = %d string is : %s", strerror(error), error, istr);
+        iconv_close(ichandle);
+        return(1); 
+    }
+    iconv_close(ichandle);
+#endif    
+    return(0);
+}
 
 /**
  * FSAL_str2name :
@@ -40,6 +78,7 @@
  *      - ERR_FSAL_FAULT
  *      - ERR_FSAL_NAMETOOLONG
  */
+
 
 fsal_status_t FSAL_str2name(const char *string, /* IN */
                             fsal_mdsize_t in_str_maxlen,        /* IN */
@@ -312,10 +351,14 @@ fsal_status_t FSAL_pathcpy(fsal_path_t * p_tgt_path, fsal_path_t * p_src_path)
  */
 fsal_status_t FSAL_buffdesc2name(fsal_buffdesc_t * in_buf, fsal_name_t * out_name)
 {
-
+ 
   if(!in_buf || !out_name)
     ReturnCode(ERR_FSAL_FAULT, 0);
 
+  if(FSAL_checkutf8(in_buf->pointer, in_buf->len))
+  {
+    ReturnCode(ERR_FSAL_INVAL, 0);
+  }
   return FSAL_str2name(in_buf->pointer, in_buf->len, out_name);
 
 }
@@ -329,6 +372,11 @@ fsal_status_t FSAL_buffdesc2path(fsal_buffdesc_t * in_buf, fsal_path_t * out_pat
 
   if(!in_buf || !out_path)
     ReturnCode(ERR_FSAL_FAULT, 0);
+
+  if(FSAL_checkutf8(in_buf->pointer, in_buf->len))
+  {
+    ReturnCode(ERR_FSAL_INVAL, 0);
+  }
 
   return FSAL_str2path(in_buf->pointer, in_buf->len, out_path);
 

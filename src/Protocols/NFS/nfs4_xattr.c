@@ -1182,7 +1182,11 @@ int nfs4_op_lookup_xattr(struct nfs_argop4 *op,
   pfsal_handle = &data->current_entry->handle;
 
   /* UTF8 strings may not end with \0, but they carry their length */
-  utf82str(strname, sizeof(strname), &arg_LOOKUP4.objname);
+  if(utf82str(strname, sizeof(strname), &arg_LOOKUP4.objname))
+    {
+      res_LOOKUP4.status = NFS4ERR_INVAL;
+      return res_LOOKUP4.status;
+    }
 
   /* Build the FSAL name */
   if((cache_status = cache_inode_error_convert(FSAL_str2name(strname,
@@ -1513,7 +1517,11 @@ int nfs4_op_open_xattr(struct nfs_argop4 *op,
   pfsal_handle = &data->current_entry->handle;
 
   /* UTF8 strings may not end with \0, but they carry their length */
-  utf82str(strname, sizeof(strname), &arg_OPEN4.claim.open_claim4_u.file);
+  if(utf82str(strname, sizeof(strname), &arg_OPEN4.claim.open_claim4_u.file))
+    {
+      res_OPEN4.status = NFS4ERR_INVAL;
+      return res_OPEN4.status;
+    }
 
   /* Build the FSAL name */
   if((cache_status = cache_inode_error_convert(FSAL_str2name(strname,
