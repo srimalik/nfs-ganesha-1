@@ -295,6 +295,15 @@ int nfs4_Compound(nfs_arg_t * parg /* IN     */ ,
   memcpy(&(pres->res_compound4.tag), &(parg->arg_compound4.tag),
          sizeof(parg->arg_compound4.tag));
 
+  if(FSAL_checkutf8(parg->arg_compound4.tag.utf8string_val, parg->arg_compound4.tag.utf8string_len))
+  {
+    status = NFS4ERR_INVAL;
+    pres->res_compound4.resarray.resarray_val[0].nfs_resop4_u.opexchange_id.eir_status = status;
+    pres->res_compound4.status = status;
+    LogCrit(COMPONENT_NFS_V4, "Invalid tag");
+    return NFS_REQ_OK;
+  }
+
   if(utf8dup(&(pres->res_compound4.tag), &(parg->arg_compound4.tag)) == -1)
     {
       LogCrit(COMPONENT_NFS_V4, "Unable to duplicate tag into response");

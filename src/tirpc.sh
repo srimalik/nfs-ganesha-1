@@ -3,7 +3,7 @@
 OPWD=`pwd`
 
 TIRPC_REPO='git://github.com/mattbenjamin/libtirpc-lbx.git'
-TIRPC_BRANCH='duplex-6'
+TIRPC_BRANCH='duplex-7'
 
 # remove libtirpc if present;  try to avoid making
 # a mess

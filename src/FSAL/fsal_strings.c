@@ -16,6 +16,9 @@
 
 #include "fsal.h"
 #include <string.h>
+#include <iconv.h>
+#include <stdlib.h>
+#include <errno.h>
 
 /**
  * @defgroup FSALNameFunctions Name handling functions.
@@ -24,6 +27,59 @@
  * 
  * @{
  */
+
+/**
+ * FSAL_checkutf8 :
+ * converts a char * to an fsal_name_t.
+ * 
+ * \param istr (in, char *)
+ *        buffer containing seq of bytes.
+ * \param isize (in, size_t)
+ *        Size of the buffer.   
+ * \return :
+ *      - int
+ */
+
+#ifdef _ENABLE_UTF8_CHECK
+int FSAL_checkutf8(char *istr, size_t isize)
+{
+    size_t osize = isize;
+    iconv_t ichandle = (iconv_t) -1;
+    char *ostr = NULL, *saved_ostr;
+
+    if(isize == 0 || !istr)
+      {
+        return(0);
+      }
+    ostr = malloc(osize);
+    if(!ostr)
+        return(1);  //Or abort..OOM
+    saved_ostr = ostr;
+    errno = 0;
+    ichandle = iconv_open("UTF8","UTF8");
+    if(ichandle == (iconv_t) -1)
+      {
+        LogCrit(COMPONENT_NFS_V4, "Failed to init iconv conversion descriptor %s", strerror(errno));
+        free(saved_ostr);
+        return(1);
+      }
+    if(iconv(ichandle, &istr, &isize, &ostr, &osize) == (size_t) -1);
+      {
+        if(!errno)
+          {
+            iconv_close(ichandle);
+            free(saved_ostr);
+            return(0);
+          }  
+        //LogCrit(COMPONENT_NFS_V4, "error = %s int = %d string is : %s", strerror(error), error, istr);
+        iconv_close(ichandle);
+        return(1); 
+      }
+    iconv_close(ichandle);
+    free(saved_ostr);
+    return(0);
+}
+#endif
 
 /**
  * FSAL_str2name :
@@ -316,6 +372,10 @@ fsal_status_t FSAL_buffdesc2name(fsal_buffdesc_t * in_buf, fsal_name_t * out_nam
   if(!in_buf || !out_name)
     ReturnCode(ERR_FSAL_FAULT, 0);
 
+  if(FSAL_checkutf8(in_buf->pointer, in_buf->len))
+  {
+    ReturnCode(ERR_FSAL_INVAL, 0);
+  }
   return FSAL_str2name(in_buf->pointer, in_buf->len, out_name);
 
 }
@@ -330,6 +390,10 @@ fsal_status_t FSAL_buffdesc2path(fsal_buffdesc_t * in_buf, fsal_path_t * out_pat
   if(!in_buf || !out_path)
     ReturnCode(ERR_FSAL_FAULT, 0);
 
+  if(FSAL_checkutf8(in_buf->pointer, in_buf->len))
+  {
+    ReturnCode(ERR_FSAL_INVAL, 0);
+  }
   return FSAL_str2path(in_buf->pointer, in_buf->len, out_path);
 
 }
