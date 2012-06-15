@@ -128,7 +128,11 @@ int nfs4_op_lookup(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
 #endif
 
   /* UTF8 strings may not end with \0, but they carry their length */
-  utf82str(strname, sizeof(strname), &arg_LOOKUP4.objname);
+  if(utf82str(strname, sizeof(strname), &arg_LOOKUP4.objname))
+    {
+      res_LOOKUP4.status = NFS4ERR_INVAL;
+      return res_LOOKUP4.status;
+    }
 
 #ifndef _NO_XATTRD
   /* Is this a .xattr.d.<object> name ? */
@@ -139,10 +143,9 @@ int nfs4_op_lookup(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
     }
 #endif
 
-  if((cache_status = cache_inode_error_convert(FSAL_str2name(strname,
-                                                             MAXNAMLEN,
-                                                             &name))) !=
-     CACHE_INODE_SUCCESS)
+  if((cache_status = cache_inode_error_convert(FSAL_buffdesc2name
+                                                            ((fsal_buffdesc_t *) & arg_LOOKUP4.objname,
+                                                             &name))) != CACHE_INODE_SUCCESS)
     {
       res_LOOKUP4.status = nfs4_Errno(cache_status);
       return res_LOOKUP4.status;
