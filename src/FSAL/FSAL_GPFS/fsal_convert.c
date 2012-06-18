@@ -33,6 +33,8 @@ static int gpfs_acl_2_fsal_acl(fsal_attrib_list_t * p_object_attributes,
                                gpfs_acl_t *p_gpfsacl);
 #endif                          /* _USE_NFS4_ACL */
 
+extern uint32_t open_fd_count;
+
 /**
  * posix2fsal_error :
  * Convert POSIX error codes to FSAL error codes.
@@ -76,8 +78,8 @@ int posix2fsal_error(int posix_errorcode)
     case EPIPE:
 
       /* all shown as IO errors */
-      LogCrit(COMPONENT_FSAL, "%s mapping %d to ERR_FSAL_IO",
-                        __FUNCTION__, posix_errorcode);
+      LogCrit(COMPONENT_FSAL, "%s mapping %d to ERR_FSAL_IO, open_fd_count=%d",
+                        __FUNCTION__, posix_errorcode, open_fd_count);
       return ERR_FSAL_IO;
 
       /* no such device */
