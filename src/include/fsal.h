@@ -297,6 +297,11 @@ fsal_status_t FSAL_pathcpy(fsal_path_t * p_tgt_path, fsal_path_t * p_src_path);
 #ifndef _USE_SWIG
 /** utf8 management functions. */
 
+#ifdef _ENABLE_UTF8_CHECK
+  int FSAL_checkutf8(char *, size_t);
+#else
+  #define FSAL_checkutf8(a, b) 0
+#endif
 fsal_status_t FSAL_buffdesc2name(fsal_buffdesc_t * in_buf, fsal_name_t * out_name);
 
 fsal_status_t FSAL_buffdesc2path(fsal_buffdesc_t * in_buf, fsal_path_t * out_path);
