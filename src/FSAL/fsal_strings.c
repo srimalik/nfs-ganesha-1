@@ -40,9 +40,15 @@
  *      - int
  */
 
+<<<<<<< HEAD
 #ifdef _ENABLE_UTF8_CHECK
 int FSAL_checkutf8(char *istr, size_t isize)
 {
+=======
+int FSAL_checkutf8(char *istr, size_t isize)
+{
+#ifdef _ENABLE_UTF8_CHECK
+>>>>>>> 2b2e174266e885f7724160ba66bf722ba09de923
     size_t osize = isize;
     iconv_t ichandle = (iconv_t) -1;
     char *ostr = NULL, *saved_ostr;
@@ -52,6 +58,10 @@ int FSAL_checkutf8(char *istr, size_t isize)
         return(0);
       }
     ostr = malloc(osize);
+<<<<<<< HEAD
+=======
+    LogCrit(COMPONENT_NFS_V4, "malloc returned %p", ostr);
+>>>>>>> 2b2e174266e885f7724160ba66bf722ba09de923
     if(!ostr)
         return(1);  //Or abort..OOM
     saved_ostr = ostr;
@@ -60,6 +70,10 @@ int FSAL_checkutf8(char *istr, size_t isize)
     if(ichandle == (iconv_t) -1)
       {
         LogCrit(COMPONENT_NFS_V4, "Failed to init iconv conversion descriptor %s", strerror(errno));
+<<<<<<< HEAD
+=======
+        LogCrit(COMPONENT_NFS_V4, "freeing %p", saved_ostr);
+>>>>>>> 2b2e174266e885f7724160ba66bf722ba09de923
         free(saved_ostr);
         return(1);
       }
@@ -68,6 +82,10 @@ int FSAL_checkutf8(char *istr, size_t isize)
         if(!errno)
           {
             iconv_close(ichandle);
+<<<<<<< HEAD
+=======
+            LogCrit(COMPONENT_NFS_V4, "freeing %p", saved_ostr);
+>>>>>>> 2b2e174266e885f7724160ba66bf722ba09de923
             free(saved_ostr);
             return(0);
           }  
@@ -76,10 +94,18 @@ int FSAL_checkutf8(char *istr, size_t isize)
         return(1); 
       }
     iconv_close(ichandle);
+<<<<<<< HEAD
     free(saved_ostr);
     return(0);
 }
 #endif
+=======
+    LogCrit(COMPONENT_NFS_V4, "freeing %p", saved_ostr);
+    free(saved_ostr);
+#endif    
+    return(0);
+}
+>>>>>>> 2b2e174266e885f7724160ba66bf722ba09de923
 
 /**
  * FSAL_str2name :
