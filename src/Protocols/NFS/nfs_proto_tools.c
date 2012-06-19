@@ -2182,6 +2182,11 @@ int utf82str(char *str, int size, utf8string * utf8str)
       return -1;
     }
 
+  if(FSAL_checkutf8(utf8str->utf8string_val, utf8str->utf8string_len))
+    {    
+      return -1;
+    }
+
   if(utf8str->utf8string_len >= size)
     copy = size - 1;
   else
