@@ -295,6 +295,13 @@ int nfs4_Compound(nfs_arg_t * parg /* IN     */ ,
   memcpy(&(pres->res_compound4.tag), &(parg->arg_compound4.tag),
          sizeof(parg->arg_compound4.tag));
 
+  /* Allocating the reply nfs_resop4 */
+  if((pres->res_compound4.resarray.resarray_val =
+      (struct nfs_resop4 *)Mem_Alloc((COMPOUND4_ARRAY.argarray_len) *
+                                     sizeof(struct nfs_resop4))) == NULL)
+    {
+      return NFS_REQ_DROP;
+    }
   if(FSAL_checkutf8(parg->arg_compound4.tag.utf8string_val, parg->arg_compound4.tag.utf8string_len))
   {
     status = NFS4ERR_INVAL;
@@ -310,13 +317,6 @@ int nfs4_Compound(nfs_arg_t * parg /* IN     */ ,
       return NFS_REQ_DROP;
     }
 
-  /* Allocating the reply nfs_resop4 */
-  if((pres->res_compound4.resarray.resarray_val =
-      (struct nfs_resop4 *)Mem_Alloc((COMPOUND4_ARRAY.argarray_len) *
-                                     sizeof(struct nfs_resop4))) == NULL)
-    {
-      return NFS_REQ_DROP;
-    }
 
   if(isDebug(COMPONENT_NFS_V4) && pres->res_compound4.tag.utf8string_len > 0)
     {
