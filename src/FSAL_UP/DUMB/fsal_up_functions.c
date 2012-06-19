@@ -78,7 +78,6 @@ fsal_status_t dumb_fsal_up_invalidate_step2(fsal_up_event_data_t * pevdata)
 fsal_status_t dumb_fsal_up_update(fsal_up_event_data_t * pevdata)
 {
   cache_inode_status_t cache_status;
-  fsal_attrib_list_t     attr;
 
   LogFullDebug(COMPONENT_FSAL_UP,
                "FSAL_UP_DUMB: Entered dumb_fsal_up_update\n");
