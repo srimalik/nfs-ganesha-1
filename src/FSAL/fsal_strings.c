@@ -45,39 +45,41 @@ int FSAL_checkutf8(char *istr, size_t isize)
 {
     size_t osize = isize;
     iconv_t ichandle = (iconv_t) -1;
-    char *ostr = NULL, *saved_ostr;
+    char *ostr = NULL, *saved_ostr = NULL;
+    int rc = 1;
 
     if(isize == 0 || !istr)
       {
-        return(0);
+        rc = 0;
+        goto done;
       }
     ostr = malloc(osize);
     if(!ostr)
-        return(1);  //Or abort..OOM
+     {
+        rc = 1;  //Or abort..OOM
+        goto done;
+     }
     saved_ostr = ostr;
     errno = 0;
     ichandle = iconv_open("UTF8","UTF8");
     if(ichandle == (iconv_t) -1)
       {
         LogCrit(COMPONENT_NFS_V4, "Failed to init iconv conversion descriptor %s", strerror(errno));
-        free(saved_ostr);
-        return(1);
+        rc = 1;
+        goto done;
       }
-    if(iconv(ichandle, &istr, &isize, &ostr, &osize) == (size_t) -1);
+    if(iconv(ichandle, &istr, &isize, &ostr, &osize) == (size_t) -1)
       {
-        if(!errno)
-          {
-            iconv_close(ichandle);
-            free(saved_ostr);
-            return(0);
-          }  
-        //LogCrit(COMPONENT_NFS_V4, "error = %s int = %d string is : %s", strerror(error), error, istr);
-        iconv_close(ichandle);
-        return(1); 
+        rc = errno;
+        goto done;
       }
-    iconv_close(ichandle);
-    free(saved_ostr);
-    return(0);
+      rc = 0; 
+done:
+    if(ichandle != (iconv_t) -1) 
+      iconv_close(ichandle);
+    if(saved_ostr) 
+      free(saved_ostr);
+    return(rc);
 }
 
 #endif
