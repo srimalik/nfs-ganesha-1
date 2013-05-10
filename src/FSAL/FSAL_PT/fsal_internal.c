@@ -1431,6 +1431,7 @@ fsal_boolean_t fsal_error_is_info(fsal_status_t status)
     case ERR_FSAL_PERM:
     case ERR_FSAL_NOT_OPENED:
     case ERR_FSAL_ACCESS:
+    case ERR_FSAL_SHARE_DENIED:    
     case ERR_FSAL_FILE_OPEN:
     case ERR_FSAL_DELAY:
     case ERR_FSAL_NOTEMPTY:

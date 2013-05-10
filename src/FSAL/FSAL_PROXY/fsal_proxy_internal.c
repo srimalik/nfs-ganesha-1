@@ -315,11 +315,14 @@ fsal_status_t fsal_internal_proxy_error_convert(nfsstat4 nfsstatus, int indexfun
 
     case NFS4ERR_EXPIRED:
     case NFS4ERR_LOCKED:
-    case NFS4ERR_SHARE_DENIED:
     case NFS4ERR_LOCK_RANGE:
     case NFS4ERR_OPENMODE:
     case NFS4ERR_FILE_OPEN:
       Return(ERR_FSAL_ACCESS, (int)nfsstatus, indexfunc);
+      break;
+    
+    case NFS4ERR_SHARE_DENIED:
+      Return(ERR_FSAL_SHARE_DENIED, (int)nfsstatus, indexfunc);
       break;
 
     case NFS4ERR_FHEXPIRED:
