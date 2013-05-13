@@ -3938,7 +3938,6 @@ nfsstat3 nfs3_Errno_verbose(cache_inode_status_t error, const char *where)
       nfserror = NFS3ERR_NOENT;
       break;
 
-    case CACHE_INODE_FSAL_SHARE_DENIED:
     case CACHE_INODE_FSAL_EACCESS:
       nfserror = NFS3ERR_ACCES;
       break;
@@ -3978,6 +3977,7 @@ nfsstat3 nfs3_Errno_verbose(cache_inode_status_t error, const char *where)
       nfserror = NFS3ERR_NOTSUPP;
       break;
 
+    case CACHE_INODE_FSAL_SHARE_DENIED:
     case CACHE_INODE_DELAY:
       nfserror = NFS3ERR_JUKEBOX;
       break;

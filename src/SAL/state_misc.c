@@ -370,9 +370,6 @@ nfsstat4 nfs4_Errno_state(state_status_t error)
       nfserror = NFS4ERR_FILE_OPEN;
       break;
 
-    case STATE_FSAL_SHARE_DENIED:
-      nfserror = NFS4ERR_SHARE_DENIED;
-
      case STATE_NAME_TOO_LONG:
       nfserror = NFS4ERR_NAMETOOLONG;
       break;
@@ -384,6 +381,7 @@ nfsstat4 nfs4_Errno_state(state_status_t error)
       break;
 
     case STATE_STATE_CONFLICT:
+    case STATE_FSAL_SHARE_DENIED:
       nfserror = NFS4ERR_SHARE_DENIED;
       break;
 
@@ -518,7 +516,6 @@ nfsstat3 nfs3_Errno_state(state_status_t error)
       nfserror = NFS3ERR_NOENT;
       break;
 
-    case STATE_FSAL_SHARE_DENIED:
     case STATE_FSAL_EACCESS:
       nfserror = NFS3ERR_ACCES;
       break;
@@ -559,6 +556,7 @@ nfsstat3 nfs3_Errno_state(state_status_t error)
       break;
 
     case STATE_FSAL_DELAY:
+    case STATE_FSAL_SHARE_DENIED:
       nfserror = NFS3ERR_JUKEBOX;
       break;
 
