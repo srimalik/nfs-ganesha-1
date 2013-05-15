@@ -60,6 +60,7 @@
 #include "nfs_proto_functions.h"
 #include "nfs_proto_tools.h"
 #include "nfs_tools.h"
+#include "sal_functions.h"
 
 static void
 nfs_read_ok(exportlist_t * pexport,
@@ -180,6 +181,7 @@ int nfs_Read(nfs_arg_t *parg,
       pres->res_attr2.status = NFS_OK;
     }
 
+
   /* Convert file handle into a cache entry */
   if((pentry = nfs_FhandleToCache(preq->rq_vers,
                                   &(parg->arg_read2.file),
@@ -190,6 +192,13 @@ int nfs_Read(nfs_arg_t *parg,
                                   NULL, &pre_attr, pcontext, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
+      goto out;
+    }
+
+  if(nfs_in_grace() && preq->rq_vers == NFS_V3)
+    {
+      pres->res_read3.status = NFS3ERR_JUKEBOX;
+      rc = NFS_REQ_OK;
       goto out;
     }
 
