@@ -181,7 +181,6 @@ int nfs_Read(nfs_arg_t *parg,
       pres->res_attr2.status = NFS_OK;
     }
 
-
   /* Convert file handle into a cache entry */
   if((pentry = nfs_FhandleToCache(preq->rq_vers,
                                   &(parg->arg_read2.file),
