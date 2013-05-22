@@ -60,6 +60,7 @@
 #include "nfs_proto_functions.h"
 #include "nfs_tools.h"
 #include "nfs_proto_tools.h"
+#include "sal_functions.h"
 
 /**
  * @brief The NFS PROC2 and PROC3 SETATTR
@@ -138,6 +139,15 @@ int nfs_Setattr(nfs_arg_t *parg,
                      &pre_attr, &(pres->res_setattr3.SETATTR3res_u.resok.obj_wcc));
 
       pres->res_setattr3.status = NFS3_OK;
+      rc = NFS_REQ_OK;
+      goto out;
+    }
+
+  if(nfs_in_grace() 
+     && parg->arg_setattr3.new_attributes.size.set_it 
+     && preq->rq_vers == NFS_V3) 
+    {
+      pres->res_read3.status = NFS3ERR_JUKEBOX;
       rc = NFS_REQ_OK;
       goto out;
     }
