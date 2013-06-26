@@ -390,7 +390,7 @@ fsal_status_t FUSEFSAL_setattrs(fsal_handle_t *handle, /* IN */
   /* Optionaly fill output attributes. */
   if(object_attributes)
     {
-
+      object_attributes->asked_attributes = global_fs_info.supported_attrs;
       status = FUSEFSAL_getattrs(filehandle, p_context, object_attributes);
 
       /* on error, we set a special bit in the mask. */

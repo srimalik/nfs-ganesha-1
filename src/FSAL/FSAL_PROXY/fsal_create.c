@@ -285,6 +285,20 @@ fsal_status_t PROXYFSAL_create(fsal_handle_t * parent_directory_handle,    /* IN
   if(FSAL_IS_ERROR(fsal_status))
     Return(fsal_status.major, fsal_status.minor, INDEX_FSAL_create);
 
+  if(object_attributes)
+    {
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+        {
+          status = PROXYFSAL_setattrs(object_handle, context, object_attributes,  object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_create);
+            }
+        }  
+    }
   /* OK */
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_create);
 }                               /* FSAL_create */
@@ -486,6 +500,20 @@ fsal_status_t PROXYFSAL_mkdir(fsal_handle_t * parent_directory_handle,     /* IN
     Return(ERR_FSAL_FAULT, 0, INDEX_FSAL_mkdir);
 
   PRINT_HANDLE("FSAL_mkdir new obj", object_handle);
+  if(object_attributes)
+    {
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+        {
+          status = PROXYFSAL_setattrs(object_handle, context, object_attributes,  object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mkdir);
+            }
+        }  
+    }
 
   /* OK */
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_mkdir);

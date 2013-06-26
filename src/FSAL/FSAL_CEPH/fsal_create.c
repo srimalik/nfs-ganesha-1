@@ -128,13 +128,17 @@ fsal_status_t CEPHFSAL_create(fsal_handle_t * extparent,
   if(object_attributes)
     {
       fsal_status_t status;
-      status = posix2fsal_attributes(&st, object_attributes);
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(object_attributes->asked_attributes);
-          FSAL_SET_MASK(object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-          Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_create);
-        }
+          status = CEPHFSAL_setattrs(object_handle, extcontext, object_attributes,  object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_create);
+            }
+        }  
     }
 
   /* OK */
@@ -227,14 +231,17 @@ fsal_status_t CEPHFSAL_mkdir(fsal_handle_t * extparent,
   if(object_attributes)
     {
       fsal_status_t status;
-      status = posix2fsal_attributes(&st, object_attributes);
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(object_attributes->asked_attributes);
-          FSAL_SET_MASK(object_attributes->asked_attributes,
-                        FSAL_ATTR_RDATTR_ERR);
-          Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_mkdir);
-        }
+          status = CEPHFSAL_setattrs(object_handle, extcontext, object_attributes, object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mkdir);
+            }
+        }  
     }
 
   /* OK */

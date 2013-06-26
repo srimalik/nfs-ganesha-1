@@ -176,15 +176,15 @@ fsal_status_t XFSFSAL_create(fsal_handle_t * p_parent_directory_handle,      /* 
   /* retrieve file attributes */
   if(p_object_attributes)
     {
-      status = XFSFSAL_getattrs(p_object_handle, p_context, p_object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
+      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-          FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
+          status = XFSFSAL_setattrs(p_object_handle, p_context, p_object_attributes, p_object_attributes);
 
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStus(status, INDEX_FSAL_create);
+            }
+        }  
     }
 
   /* OK */
@@ -337,15 +337,15 @@ fsal_status_t XFSFSAL_mkdir(fsal_handle_t * p_parent_directory_handle,       /* 
   /* retrieve file attributes */
   if(p_object_attributes)
     {
-      status = XFSFSAL_getattrs(p_object_handle, p_context, p_object_attributes);
+      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+        {  
+          status = XFSFSAL_setattrs(p_object_handle, p_context, p_object_attributes, p_object_attributes);
 
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
-        {
-          FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-          FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mkdir);
+            }
         }
-
     }
 
   /* OK */
@@ -629,16 +629,15 @@ fsal_status_t XFSFSAL_mknode(fsal_handle_t * parentdir_handle,       /* IN */
   if(node_attributes)
     {
 
-      status = XFSFSAL_getattrs(p_object_handle, p_context, node_attributes);
-
-      /* on error, we set a special bit in the mask. */
-
-      if(FSAL_IS_ERROR(status))
+      if(node_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(node_attributes->asked_attributes);
-          FSAL_SET_MASK(node_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
+          status = XFSFSAL_setattrs(p_object_handle, p_context, node_attributes, node_attributes);
 
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mknode);
+            }
+        }  
     }
 
   /* Finished */

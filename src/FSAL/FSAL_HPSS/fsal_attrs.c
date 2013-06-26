@@ -234,7 +234,7 @@ fsal_status_t HPSSFSAL_setattrs(hpssfsal_handle_t * filehandle, /* IN */
   /* if more attributes are asked, we have to proceed a getattr. */
   else if(object_attributes)
     {
-
+      object_attributes->asked_attributes = global_fs_info.supported_attrs;
       status = HPSSFSAL_getattrs(filehandle, p_context, object_attributes);
 
       /* on error, we set a special bit in the mask. */

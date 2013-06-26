@@ -76,6 +76,8 @@ int _9p_mknod( _9p_request_data_t * preq9p,
   cache_inode_file_type_t nodetype;
   cache_inode_create_arg_t create_arg;
 
+  memset(&fsalattr, 0, sizeof(fsal_attrib_list_t));
+
   if ( !preq9p || !pworker_data || !plenout || !preply )
    return -1 ;
 

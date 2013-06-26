@@ -154,16 +154,17 @@ fsal_status_t POSIXFSAL_create(fsal_handle_t * parent_directory_handle,  /* IN *
 
   if(p_object_attributes)
     {
-
-      /* convert POSIX attributes to fsal attributes */
-      status = posix2fsal_attributes(&buffstat, p_object_attributes);
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-          FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+          status = POSIXFSAL_setattrs(object_handle, context, p_object_attributes, p_object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_create);
+            }
+        }  
     }
 
   /* OK */
@@ -291,17 +292,17 @@ fsal_status_t POSIXFSAL_mkdir(fsal_handle_t * parent_directory_handle,   /* IN *
   /* Fills the attributes if needed */
   if(p_object_attributes)
     {
-
-      status = posix2fsal_attributes(&buffstat, p_object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-          FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+          status = POSIXFSAL_setattrs(object_handle, context, p_object_attributes, p_object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mkdir);
+            }
+        }  
     }
 
   /* OK */
@@ -569,17 +570,17 @@ fsal_status_t POSIXFSAL_mknode(fsal_handle_t * parentdir_hdl,   /* IN */
   /* Fills the attributes if needed */
   if(node_attributes)
     {
-
-      status = posix2fsal_attributes(&buffstat, node_attributes);
-
-      /* on error, we set a special bit in the mask. */
-
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(p_node_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(node_attributes->asked_attributes);
-          FSAL_SET_MASK(node_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+          status = POSIXFSAL_setattrs(object_handle, context, node_attributes, node_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mknode);
+            }
+        }  
     }
 
   /* Finished */

@@ -250,15 +250,11 @@ fsal_status_t VFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,   /* IN
 
   if(p_link_attributes)
     {
-
-      status = VFSFSAL_getattrs(p_link_handle, p_context, p_link_attributes);
-
-      /* On error, we set a flag in the returned attributes */
+      status = VFSFSAL_setattrs(p_link_handle, p_context, p_link_attributes);
 
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(p_link_attributes->asked_attributes);
-          FSAL_SET_MASK(p_link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          ReturnStatus(status, INDEX_FSAL_symlink);
         }
 
     }

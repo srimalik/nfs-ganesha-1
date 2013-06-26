@@ -588,12 +588,19 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
                        arg_OPEN4.openhow.openflag4_u.how.mode);
 
           /* Create the file, if we reach this point, it does not exist, we can create it */
+          /* If owner or owner_group are set, and the credential was
+           * squashed, then we must squash the set owner and owner_group.
+           */
+          squash_setattr(&data->export_perms,
+                             &data->pworker->user_credentials,
+                             &sattr);
+
           if((pentry_newfile = cache_inode_create(pentry_parent,
                                                   &filename,
                                                   REGULAR_FILE,
                                                   mode,
                                                   &create_arg,
-                                                  NULL,
+                                                  &sattr,
                                                   data->pcontext, &cache_status)) == NULL)
             {
               /* If the file already exists, this is not an error if open mode is UNCHECKED */
@@ -657,29 +664,6 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
           V(data->pexport->exp_state_mutex);
 
           cache_status = CACHE_INODE_SUCCESS;
-
-          if(AttrProvided == TRUE)      /* Set the attribute if provided */
-            {
-              /* If owner or owner_group are set, and the credential was
-               * squashed, then we must squash the set owner and owner_group.
-               */
-              squash_setattr(&data->export_perms,
-                             &data->pworker->user_credentials,
-                             &sattr);
-
-              if((cache_status = cache_inode_setattr(pentry_newfile,
-                                                     &sattr,
-                                                     data->pcontext,
-                                                     (arg_OPEN4.share_access & OPEN4_SHARE_ACCESS_WRITE) != 0,
-                                                     &cache_status)) !=
-                 CACHE_INODE_SUCCESS)
-                {
-                  res_OPEN4.status = nfs4_Errno(cache_status);
-                  cause2 = " cache_inode_setattr";
-                  goto out;
-                }
-
-            }
 
           /* Set the openflags variable */
           if(arg_OPEN4.share_deny & OPEN4_SHARE_DENY_WRITE)

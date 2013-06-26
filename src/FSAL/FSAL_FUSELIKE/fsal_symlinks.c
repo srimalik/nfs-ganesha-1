@@ -246,14 +246,13 @@ fsal_status_t FUSEFSAL_symlink(fsal_handle_t * parent,     /* IN */
 
   if(link_attributes)
     {
-      fsal_status_t status = posix2fsal_attributes(&buffstat, link_attributes);
+      fsal_status_t status;
 
+      status = FUSEFSAL_setattrs(link_handle, p_context, link_attributes, link_attributes )
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(link_attributes->asked_attributes);
-          FSAL_SET_MASK(link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          ReturnStatus(status, INDEX_FSAL_symlink);
         }
-
     }
 
   /* OK */

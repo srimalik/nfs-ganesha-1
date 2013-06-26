@@ -445,6 +445,7 @@ PTFSAL_setattrs(fsal_handle_t      * p_filehandle,       /* IN */
   /* Optionaly fills output attributes. */
 
   if (p_object_attributes) {
+    p_object_attributes->asked_attributes = global_fs_info.supported_attrs;
     status = PTFSAL_getattrs(p_filehandle, p_context, p_object_attributes);
 
     /* on error, we set a special bit in the mask. */

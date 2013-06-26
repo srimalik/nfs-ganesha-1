@@ -422,6 +422,7 @@ fsal_status_t LUSTREFSAL_setattrs(fsal_handle_t * p_filehandle,   /* IN */
 
   if(p_object_attributes)
     {
+      p_object_attributes->asked_attributes = global_fs_info.supported_attrs;
       status = LUSTREFSAL_getattrs(p_filehandle, p_context, p_object_attributes);
 
       /* on error, we set a special bit in the mask. */
@@ -430,7 +431,6 @@ fsal_status_t LUSTREFSAL_setattrs(fsal_handle_t * p_filehandle,   /* IN */
           FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
           FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
         }
-
     }
 
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_setattrs);

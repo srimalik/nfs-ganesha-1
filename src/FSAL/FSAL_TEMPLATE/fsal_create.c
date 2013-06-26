@@ -89,7 +89,7 @@ fsal_status_t FSAL_create(fsal_handle_t * parent_directory_handle,      /* IN */
 
   if(object_attributes)
     {
-      /* >> fill output attributes if asked << */
+      /* >> set the attributes if asked << */
     }
 
   /* OK */
@@ -167,7 +167,7 @@ fsal_status_t FSAL_mkdir(fsal_handle_t * parent_directory_handle,       /* IN */
 
   if(object_attributes)
     {
-      /* >> fill output attributes if asked << */
+      /* >> set the attributes if asked << */
     }
 
   /* OK */
@@ -243,7 +243,7 @@ fsal_status_t FSAL_link(fsal_handle_t * target_handle,  /* IN */
 
   if(attributes)
     {
-      /* >> fill output attributes if asked << */
+      /* >> set the attributes if asked << */
     }
 
   /* OK */

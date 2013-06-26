@@ -106,13 +106,14 @@ fsal_status_t ZFSFSAL_create(fsal_handle_t * parent_hdl,      /* IN */
 
   if(object_attributes)
     {
-      fsal_status_t status = ZFSFSAL_getattrs(obj_handle, context, object_attributes);
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) 
+        {      
+          fsal_status_t status = ZFSFSAL_setattrs(obj_handle, context, object_attributes, object_attributes);
 
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
-        {
-          FSAL_CLEAR_MASK(object_attributes->asked_attributes);
-          FSAL_SET_MASK(object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_create);      
+            }
         }
     }
 
@@ -217,13 +218,14 @@ fsal_status_t ZFSFSAL_mkdir(fsal_handle_t * parent_hdl,       /* IN */
   if(object_attributes)
     {
       /**@TODO: skip this => libzfswrap_mkdir might return attributes */
-      fsal_status_t status = ZFSFSAL_getattrs(obj_handle, context, object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(object_attributes->asked_attributes);
-          FSAL_SET_MASK(object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          fsal_status_t status = ZFSFSAL_setattrs(obj_handle, context, object_attributes, object_attributes);
+
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mkdir);
+            }
         }
 
     }

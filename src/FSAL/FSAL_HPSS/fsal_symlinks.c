@@ -218,15 +218,15 @@ fsal_status_t HPSSFSAL_symlink(hpssfsal_handle_t * parent_directory_handle,     
     {
 
       fsal_status_t status;
-
-      status = hpss2fsal_attributes(&(link_handle->data.ns_handle), &attrs, link_attributes);
-
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      status = HPSSFSAL_setattrs(link_handle, p_context, link_attributes, link_attributes)
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(link_attributes->asked_attributes);
-          FSAL_SET_MASK(link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          ReturnStatus(status, INDEX_FSAL_symlink);
         }
-
+      }   
     }
 
   /* OK */

@@ -283,79 +283,48 @@ int nfs_Create(nfs_arg_t *parg,
                   attr_newfile = attr;
                 }
               else
-                file_pentry = cache_inode_create(parent_pentry,
-                                                 &file_name,
-                                                 REGULAR_FILE,
-                                                 mode,
-                                                 NULL,
-                                                 &attr_newfile,
-                                                 pcontext, &cache_status);
+               {
+                 attributes_create.asked_attributes = 0ULL;
 
-              if(file_pentry != NULL)
-                {
-                  /*
-                   * Look at sattr to see if some attributes are to be set at creation time 
-                   */
-                  attributes_create.asked_attributes = 0ULL;
+                 switch (preq->rq_vers)
+                   {
+                     case NFS_V2:
+                       if(nfs2_Sattr_To_FSALattr(&attributes_create,
+                                                 &parg->arg_create2.attributes) == 0)
+                         {
+                           pres->res_dirop2.status = NFSERR_IO;
+                           rc = NFS_REQ_OK;
+                           goto out;
+                           break;
+                         }
+                       break;
 
-                  switch (preq->rq_vers)
-                    {
-                    case NFS_V2:
-
-                      if(nfs2_Sattr_To_FSALattr(&attributes_create,
-                                                &parg->arg_create2.attributes) == 0)
-                        {
-                          pres->res_dirop2.status = NFSERR_IO;
-                          rc = NFS_REQ_OK;
-                          goto out;
-                          break;
-                        }
-                      break;
-
-                    case NFS_V3:
-                      if(nfs3_Sattr_To_FSALattr(&attributes_create,
-                                                &parg->arg_create3.how.createhow3_u.
-                                                obj_attributes) == 0)
-                        {
-                          pres->res_create3.status = NFS3ERR_INVAL;
-                          rc = NFS_REQ_OK;
-                          goto out;
-                        }
-                      break;
-                    }
-
-                  /* Mode is managed above (in cache_inode_create), there is no need 
-                   * to manage it */
-                  if(attributes_create.asked_attributes & FSAL_ATTR_MODE)
-                    attributes_create.asked_attributes &= ~FSAL_ATTR_MODE;
-
-                  /* Some clients (like Solaris 10) try to set the size of the file to 0
-                   * at creation time. The FSAL create empty file, so we ignore this */
-                  if(attributes_create.asked_attributes & FSAL_ATTR_SIZE)
-                    attributes_create.asked_attributes &= ~FSAL_ATTR_SIZE;
-
-                  if(attributes_create.asked_attributes & FSAL_ATTR_SPACEUSED)
-                    attributes_create.asked_attributes &= ~FSAL_ATTR_SPACEUSED;
-
-                  /* If owner or owner_group are set, and the credential was
-                   * squashed, then we must squash the set owner and owner_group.
-                   */
+                     case NFS_V3:
+                       if(nfs3_Sattr_To_FSALattr(&attributes_create,
+                                                 &parg->arg_create3.how.createhow3_u.
+                                                 obj_attributes) == 0)
+                         {
+                           pres->res_create3.status = NFS3ERR_INVAL;
+                           rc = NFS_REQ_OK;
+                           goto out;
+                         }
+                       break;
+                     }
                   squash_setattr(&pworker->export_perms,
                                  &pworker->user_credentials,
                                  &attributes_create);
 
-                  /* Are there attributes to be set (additional to the mode) ? */
-                  if(attributes_create.asked_attributes != 0ULL &&
-                     attributes_create.asked_attributes != FSAL_ATTR_MODE)
-                    {
-                      /* A call to cache_inode_setattr is required */
-                      if(cache_inode_setattr(file_pentry,
-                                             &attributes_create,
-                                             pcontext,
-                                             FALSE,
-                                             &cache_status) != CACHE_INODE_SUCCESS)
-                        goto out_failed;
+                  file_pentry = cache_inode_create(parent_pentry,
+                                                   &file_name,
+                                                   REGULAR_FILE,
+                                                   mode,
+                                                   NULL,
+                                                   &attributes_create,
+                                                   pcontext, &cache_status);
+                }
 
+              if(file_pentry != NULL)
+                {
                       /* Get the resulting attributes from the Cache Inode */
                       attr_newfile.asked_attributes = FSAL_ATTRS_V3;
                       if(cache_inode_getattr(file_pentry,
@@ -364,7 +333,6 @@ int nfs_Create(nfs_arg_t *parg,
                                              &cache_status) != CACHE_INODE_SUCCESS)
                         goto out_failed;
 
-                    }
 
                   switch (preq->rq_vers)
                     {

@@ -176,7 +176,7 @@ fsal_status_t FSAL_symlink(fsal_handle_t * parent_directory_handle,     /* IN */
   if(link_attributes)
     {
 
-      /* >> fill output attributes if they are asked << */
+      /* >> set the attributes if they are asked << */
 
     }
 

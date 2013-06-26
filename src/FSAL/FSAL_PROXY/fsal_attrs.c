@@ -343,6 +343,7 @@ fsal_status_t PROXYFSAL_setattrs(fsal_handle_t * filehandle,       /* IN */
     {
 
       /* Use NFSv4 service function to build the FSAL_attr */
+      object_attributes->asked_attributes = global_fs_info.supported_attrs;
       if(nfs4_Fattr_To_FSAL_attr(object_attributes,
                                  &resnfs4.resarray.
                                  resarray_val[FSAL_SETATTR_IDX_OP_GETATTR].nfs_resop4_u.

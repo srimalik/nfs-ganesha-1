@@ -88,7 +88,6 @@ cache_inode_create(cache_entry_t *parent,
      cache_entry_t *entry = NULL;
      fsal_status_t fsal_status = {0, 0};
      fsal_handle_t object_handle;
-     fsal_attrib_list_t object_attributes;
      cache_inode_fsal_data_t fsal_data;
      cache_inode_create_arg_t zero_create_arg;
 
@@ -136,38 +135,36 @@ cache_inode_create(cache_entry_t *parent,
      /* Permission checking will be done by the FSAL operation. */
 
      /* The entry doesn't exist, so we can create it. */
-
-     object_attributes.asked_attributes = cache_inode_params.attrmask;
      switch (type) {
      case REGULAR_FILE:
           fsal_status = FSAL_create(&parent->handle,
                                     name, context, mode,
-                                    &object_handle, &object_attributes);
+                                    &object_handle, attr);
           break;
 
      case DIRECTORY:
           fsal_status = FSAL_mkdir(&parent->handle,
                                    name, context, mode,
-                                   &object_handle, &object_attributes);
+                                   &object_handle, attr);
           break;
 
      case SYMBOLIC_LINK:
           fsal_status = FSAL_symlink(&parent->handle,
                                      name, &create_arg->link_content,
                                      context, mode, &object_handle,
-                                     &object_attributes);
+                                     attr);
           break;
 
      case SOCKET_FILE:
           fsal_status = FSAL_mknode(&parent->handle, name, context,
                                     mode, FSAL_TYPE_SOCK, NULL,
-                                    &object_handle, &object_attributes);
+                                    &object_handle, attr);
           break;
 
      case FIFO_FILE:
           fsal_status = FSAL_mknode(&parent->handle, name, context,
                                     mode, FSAL_TYPE_FIFO, NULL,
-                                    &object_handle, &object_attributes);
+                                    &object_handle, attr);
           break;
 
      case BLOCK_FILE:
@@ -175,7 +172,7 @@ cache_inode_create(cache_entry_t *parent,
                                     name, context,
                                     mode, FSAL_TYPE_BLK,
                                     &create_arg->dev_spec,
-                                    &object_handle, &object_attributes);
+                                    &object_handle, attr);
              break;
 
      case CHARACTER_FILE:
@@ -184,7 +181,7 @@ cache_inode_create(cache_entry_t *parent,
                                     mode, FSAL_TYPE_CHR,
                                     &create_arg->dev_spec,
                                     &object_handle,
-                                    &object_attributes);
+                                    attr);
           break;
 
      default:
@@ -196,6 +193,7 @@ cache_inode_create(cache_entry_t *parent,
           goto out;
           break;
         }
+
 
      /* Refresh the parent's attributes */
      (void) cache_inode_refresh_attrs_locked(parent, context);
@@ -214,6 +212,16 @@ cache_inode_create(cache_entry_t *parent,
                        "create failed because FSAL failed");
           goto out;
      }
+     /* Check that all the required attributes are present */
+     if((cache_inode_params.attrmask & attr->asked_attributes) != cache_inode_params.attrmask)
+       {
+         /* Old behavior FSALs do not return a failed status in this case,
+          * just set the asked_attributes to FSAL_ATTR_RDATTR_ERR.
+          */
+         LogEvent(COMPONENT_CACHE_INODE, "fsal did not return all attributes");
+         attr->asked_attributes = FSAL_ATTR_RDATTR_ERR;
+       }
+
      fsal_data.fh_desc.start = (caddr_t) &object_handle;
      fsal_data.fh_desc.len = 0;
      FSAL_ExpandHandle(context->export_context,
@@ -221,7 +229,7 @@ cache_inode_create(cache_entry_t *parent,
                        &fsal_data.fh_desc);
 
      entry = cache_inode_new_entry(&fsal_data,
-                                   &object_attributes,
+                                   attr,
                                    type,
                                    create_arg,
                                    status);
@@ -246,11 +254,6 @@ cache_inode_create(cache_entry_t *parent,
           LogFullDebug(COMPONENT_CACHE_INODE,
                        "create failed because add dirent failed");
           goto out;
-     }
-
-     /* Copy up the child attributes */
-     if(attr) {
-          *attr = object_attributes;
      }
 
      *status = CACHE_INODE_SUCCESS;

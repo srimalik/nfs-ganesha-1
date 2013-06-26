@@ -228,6 +228,7 @@ fsal_status_t CEPHFSAL_setattrs(fsal_handle_t * exthandle,
   if(object_attributes)
     {
       fsal_status_t status;
+      object_attributes->asked_attributes = global_fs_info.supported_attrs;
       status = CEPHFSAL_getattrs(exthandle, extcontext, object_attributes);
 
       /* on error, we set a special bit in the mask. */

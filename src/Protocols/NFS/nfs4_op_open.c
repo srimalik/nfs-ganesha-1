@@ -659,7 +659,7 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
                                    REGULAR_FILE,
                                    mode,
                                    NULL,
-                                   NULL,
+                                   &sattr,  
                                    data->pcontext,
                                    &cache_status)) == NULL)
             {
@@ -691,34 +691,6 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
                        "create succeeded");
 
           cache_status = CACHE_INODE_SUCCESS;
-
-          if(AttrProvided == TRUE)      /* Set the attribute if provided */
-            {
-              /* If owner or owner_group are set, and the credential was
-               * squashed, then we must squash the set owner and owner_group.
-               */
-              squash_setattr(&data->export_perms,
-                             &data->pworker->user_credentials,
-                             &sattr);
-
-              if((cache_status
-                  = cache_inode_setattr(pentry_newfile,
-                                        &sattr,
-                                        data->pcontext,
-                                        (arg_OPEN4.share_access & OPEN4_SHARE_ACCESS_WRITE) != 0,
-                                        &cache_status)) !=
-                 CACHE_INODE_SUCCESS)
-                {
-                  LogFullDebug(COMPONENT_STATE,
-                               "setattr failed with %s",
-                               cache_inode_err_str(cache_status));
-
-                  res_OPEN4.status = nfs4_Errno(cache_status);
-                  cause2 = " cache_inode_setattr";
-                  cache_inode_put(pentry_newfile);
-                  goto out;
-                }
-            }
 
           PTHREAD_RWLOCK_WRLOCK(&pentry_newfile->state_lock);
           status4 = nfs4_do_open(op, data, pentry_newfile, pentry_parent,

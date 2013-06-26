@@ -199,13 +199,11 @@ fsal_status_t ZFSFSAL_symlink(fsal_handle_t * parent_directory_handle,     /* IN
   if(link_attributes)
     {
 
-      fsal_status_t status = ZFSFSAL_getattrs(link_handle, p_context, link_attributes);
+      fsal_status_t status = ZFSFSAL_setattrs(link_handle, p_context, link_attributes, link_attributes);
 
-      /* On error, we set a flag in the returned attributes */
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(link_attributes->asked_attributes);
-          FSAL_SET_MASK(link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          ReturnStatus(status, INDEX_FSAL_symlink);
         }
     }
 

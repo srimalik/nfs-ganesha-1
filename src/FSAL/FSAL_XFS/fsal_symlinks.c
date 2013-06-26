@@ -254,15 +254,12 @@ fsal_status_t XFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,     /* 
   if(p_link_attributes)
     {
 
-      status = posix2fsal_attributes(&lbuffstat, p_link_attributes);
+      status = XFSFSAL_setattrs(p_object_handle, p_context, p_link_attributes, p_link_attributes);
 
-      /* On error, we set a flag in the returned attributes */
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(p_link_attributes->asked_attributes);
-          FSAL_SET_MASK(p_link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          ReturnStatus(status, INDEX_FSAL_symlink);
         }
-
     }
 
   /* OK */

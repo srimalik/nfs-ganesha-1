@@ -190,17 +190,14 @@ fsal_status_t CEPHFSAL_symlink(fsal_handle_t * extparent,
 
   rc = stat2fsal_fh(cmount, &st, link);
   if (rc < 0)
-    Return(posix2fsal_error(rc), 0, INDEX_FSAL_create);
+    Return(posix2fsal_error(rc), 0, INDEX_FSAL_symlink);
 
   if(link_attributes)
     {
-      /* convert attributes */
-      fsal_status_t status = posix2fsal_attributes(&st, link_attributes);
+      fsal_status_t status = CEPHFSAL_setattrs(link, extcontext, link_attributes, link_attributes)
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(link_attributes->asked_attributes);
-          FSAL_SET_MASK(link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-          Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_symlink);
+          ReturnStatus(status, 0, INDEX_FSAL_symlink);
         }
     }
 

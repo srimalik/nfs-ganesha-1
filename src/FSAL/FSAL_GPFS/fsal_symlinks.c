@@ -144,7 +144,8 @@ fsal_status_t GPFSFSAL_readlink(fsal_handle_t * p_linkhandle,       /* IN */
  *        and the output is built considering this input
  *        (it fills the structure according to the flags it contains).
  *        May be NULL.
- *
+ * \param p_asked_attributes (input):
+ *        attribute list which is to be returned in link_attributes.
  * \return Major error codes :
  *        - ERR_FSAL_NO_ERROR     (no error)
  *        - Another error code if an error occured.
@@ -155,8 +156,8 @@ fsal_status_t GPFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,   /* I
                            fsal_op_context_t * p_context,       /* IN */
                            fsal_accessmode_t accessmode,        /* IN (ignored) */
                            fsal_handle_t * p_link_handle,       /* OUT */
-                           fsal_attrib_list_t * p_link_attributes       /* [ IN/OUT ] */
-    )
+                           fsal_attrib_list_t * p_link_attributes      /* [ IN/OUT ] */
+                )
 {
 
   int rc, errsv;
@@ -205,6 +206,7 @@ fsal_status_t GPFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,   /* I
       Return(posix2fsal_error(errsv), errsv, INDEX_FSAL_symlink);
     }
 
+
   /* now get the associated handle, while there is a race, there is
      also a race lower down  */
   status = fsal_internal_get_handle_at(fd, p_linkname, p_link_handle, p_context);
@@ -215,21 +217,17 @@ fsal_status_t GPFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,   /* I
       ReturnStatus(status, INDEX_FSAL_symlink);
     }
 
-  /* get attributes if asked */
-
+  /* Set the attributes */  
   if(p_link_attributes)
     {
-
-      status = GPFSFSAL_getattrs(p_link_handle, p_context, p_link_attributes);
-
-      /* On error, we set a flag in the returned attributes */
-
-      if(FSAL_IS_ERROR(status))
+      if(p_link_attributes->asked_attributes != 0ULL) 
         {
-          FSAL_CLEAR_MASK(p_link_attributes->asked_attributes);
-          FSAL_SET_MASK(p_link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          status = GPFSFSAL_setattrs(p_link_handle, p_context, p_link_attributes, p_link_attributes);
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_symlink);
+            }     
         }
-
     }
 
   /* OK */

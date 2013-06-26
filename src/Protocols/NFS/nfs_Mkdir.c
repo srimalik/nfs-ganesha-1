@@ -261,6 +261,35 @@ int nfs_Mkdir(nfs_arg_t *parg,
               /* The create_arg structure contains the information "newly created directory"
                * to be passed to cache_inode_new_entry from cache_inode_create */
               create_arg.newly_created_dir = TRUE;
+              attr.asked_attributes = 0ULL;
+
+                 switch (preq->rq_vers)
+                   {
+                     case NFS_V2:
+                       if(nfs2_Sattr_To_FSALattr(&attr,
+                                                 &parg->arg_create2.attributes) == 0)
+                         {
+                           pres->res_dirop2.status = NFSERR_IO;
+                           rc = NFS_REQ_OK;
+                           goto out;
+                           break;
+                         }
+                       break;
+
+                     case NFS_V3:
+                       if(nfs3_Sattr_To_FSALattr(&attr,
+                                                 &parg->arg_create3.how.createhow3_u.
+                                                 obj_attributes) == 0)
+                         {
+                           pres->res_create3.status = NFS3ERR_INVAL;
+                           rc = NFS_REQ_OK;
+                           goto out;
+                         }
+                       break;
+                     }
+                  squash_setattr(&pworker->export_perms,
+                                 &pworker->user_credentials,
+                                 &attr);
 
               /* Create the directory */
               if((dir_pentry = cache_inode_create(parent_pentry,

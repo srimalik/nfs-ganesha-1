@@ -199,7 +199,9 @@ fsal_status_t fsal_internal_create(fsal_op_context_t * p_context,
                                    fsal_name_t * p_stat_name,
                                    mode_t mode, dev_t dev,
                                    fsal_handle_t * p_new_handle,
-                                   struct stat *buf);
+                                   int attr_valid,
+                                   int attr_changed,
+                                   gpfsfsal_xstat_t *p_buffxstat);
 
 fsal_status_t fsal_internal_rename_fh(fsal_op_context_t * p_context,
                                     fsal_handle_t * p_old_handle,
@@ -255,7 +257,7 @@ fsal_status_t GPFSFSAL_mkdir(fsal_handle_t * p_parent_directory_handle,       /*
                             fsal_op_context_t * p_context,   /* IN */
                             fsal_accessmode_t accessmode,       /* IN */
                             fsal_handle_t * p_object_handle, /* OUT */
-                            fsal_attrib_list_t * p_object_attributes /* [ IN/OUT ] */ );
+                            fsal_attrib_list_t * p_object_attributes  /* [ IN/OUT ] */ );
 
 fsal_status_t GPFSFSAL_link(fsal_handle_t * p_target_handle,  /* IN */
                            fsal_handle_t * p_dir_handle,     /* IN */
@@ -387,7 +389,7 @@ fsal_status_t GPFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,     /*
                               fsal_op_context_t * p_context, /* IN */
                               fsal_accessmode_t accessmode,     /* IN (ignored) */
                               fsal_handle_t * p_link_handle, /* OUT */
-                              fsal_attrib_list_t * p_link_attributes /* [ IN/OUT ] */ );
+                              fsal_attrib_list_t * p_link_attributes); /* [ IN/OUT ] */
 
 int GPFSFSAL_handlecmp(fsal_handle_t * handle1, fsal_handle_t * handle2,
                       fsal_status_t * status);

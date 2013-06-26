@@ -33,6 +33,8 @@ extern uint32_t open_fd_count;
 #ifdef _USE_NFS4_ACL
 static int gpfs_acl_2_fsal_acl(fsal_attrib_list_t * p_object_attributes,
                                gpfs_acl_t *p_gpfsacl);
+fsal_status_t fsal_acl_2_gpfs_acl(fsal_acl_t *p_fsalacl, 
+                                  gpfsfsal_xstat_t *p_buffxstat);
 #endif                          /* _USE_NFS4_ACL */
 
 /**
@@ -559,6 +561,99 @@ fsal_status_t gpfsfsal_xstat_2_fsal_attributes(gpfsfsal_xstat_t *p_buffxstat,
     /* everything has been copied ! */
 
     ReturnCode(ERR_FSAL_NO_ERROR, 0);
+}
+
+fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_attributes, 
+                              gpfsfsal_xstat_t *p_buffxstat, 
+                              int * p_attr_valid, 
+                              int * p_attr_changed)
+{
+  fsal_status_t status = {0, 0};
+  if(!global_fs_info.cansettime)
+    {
+      if(p_object_attributes->asked_attributes
+         & (FSAL_ATTR_ATIME | FSAL_ATTR_CREATION | FSAL_ATTR_CTIME | FSAL_ATTR_MTIME |
+            FSAL_ATTR_ATIME_SERVER | FSAL_ATTR_MTIME_SERVER))
+        {
+          /* handled as an unsettable attribute. */
+          status.major = ERR_FSAL_INVAL;
+          return(status);
+        }
+    }
+
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_SIZE))
+  {
+    /* Size should never be set for a new object
+     * We let the cache_inode_layer handle that and set if cache_inode asks for this.
+     */
+    *p_attr_changed |= XATTR_SIZE;
+    p_buffxstat->buffstat.st_size = p_object_attributes->filesize;
+    LogDebug(COMPONENT_FSAL,"Setting size on a new object");
+  }
+
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_MODE))
+    {
+      *p_attr_changed |= XATTR_MODE;
+      //TODO: use buf.st_mode for now and check from marc which one is to be used. remove one of them
+      p_buffxstat->buffstat.st_mode = fsal2unix_mode(p_object_attributes->mode & (~global_fs_info.umask));
+      LogDebug(COMPONENT_FSAL, "object mode = %o", p_buffxstat->buffstat.st_mode);
+    }
+
+ if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_OWNER)) 
+   {
+     *p_attr_changed |= XATTR_UID;
+     p_buffxstat->buffstat.st_uid = p_object_attributes->owner;
+     LogDebug(COMPONENT_FSAL, "object owner uid = %d", p_buffxstat->buffstat.st_uid);
+   }
+
+ if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_GROUP))
+   {
+     *p_attr_changed |= XATTR_GID;
+     p_buffxstat->buffstat.st_gid = p_object_attributes->group;
+     LogDebug(COMPONENT_FSAL, "object owner gid = %d", p_buffxstat->buffstat.st_gid);
+   }
+
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_ATIME))
+    {
+      *p_attr_changed |= XATTR_ATIME;
+      p_buffxstat->buffstat.st_atime = p_object_attributes->atime.seconds;
+      p_buffxstat->buffstat.st_atim.tv_nsec = p_object_attributes->atime.nseconds;
+      LogDebug(COMPONENT_FSAL, "object atime = %lu", p_buffxstat->buffstat.st_atime);
+    }
+
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_MTIME))
+    {
+      *p_attr_changed |= XATTR_MTIME;
+      p_buffxstat->buffstat.st_mtime = p_object_attributes->mtime.seconds;
+      p_buffxstat->buffstat.st_mtim.tv_nsec = p_object_attributes->mtime.nseconds;
+      LogDebug(COMPONENT_FSAL, "object atime = %lu", p_buffxstat->buffstat.st_atime);
+    }
+
+  /* Setting to server time is implicit in create */
+
+  if(*p_attr_changed !=0) 
+    *p_attr_valid |= XATTR_STAT;
+
+#ifdef _USE_NFS4_ACL
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_ACL))
+    {
+      if(p_object_attributes->acl)
+      {
+        *p_attr_valid |= XATTR_ACL;
+        LogDebug(COMPONENT_FSAL, "create acl = %p", p_object_attributes->acl);
+        status = fsal_acl_2_gpfs_acl(p_object_attributes->acl, p_buffxstat);
+        if(FSAL_IS_ERROR(status))
+          return(status);
+      }
+    else
+      {
+        LogCrit(COMPONENT_FSAL, "create acl is NULL");
+        status.major = ERR_FSAL_FAULT;
+        return(status);
+      }
+    }
+#endif
+  return(status);
 }
 
 #ifdef _USE_NFS4_ACL

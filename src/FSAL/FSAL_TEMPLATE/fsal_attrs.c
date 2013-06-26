@@ -163,7 +163,7 @@ fsal_status_t FSAL_setattrs(fsal_handle_t * filehandle, /* IN */
 
   if(object_attributes)
     {
-
+      object_attributes->asked_attributes = default_hpss_info.supported_attrs;
       status = FSAL_getattrs(filehandle, p_context, object_attributes);
 
       /* on error, we set a special bit in the mask. */

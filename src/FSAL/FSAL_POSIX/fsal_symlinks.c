@@ -218,16 +218,15 @@ fsal_status_t POSIXFSAL_symlink(fsal_handle_t * parent_directory_handle, /* IN *
 
   if(p_link_attributes)
     {
-
-      status = posix2fsal_attributes(&buffstat, p_link_attributes);
-
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      status = POSIXFSAL_setattrs(link_handle, context, p_link_attributes, p_link_attributes )
       if(FSAL_IS_ERROR(status))
         {
-          FSAL_CLEAR_MASK(p_link_attributes->asked_attributes);
-          FSAL_SET_MASK(p_link_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
+          ReturnStatus(status, INDEX_FSAL_symlink);
         }
-
-    }
+    }  
 
   /* OK */
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_symlink);

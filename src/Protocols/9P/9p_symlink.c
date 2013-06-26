@@ -75,6 +75,8 @@ int _9p_symlink( _9p_request_data_t * preq9p,
   fsal_accessmode_t mode = 0777;
   cache_inode_create_arg_t create_arg;
 
+  memset(&fsalattr, 0, sizeof(fsal_attrib_list_t));
+
   if ( !preq9p || !pworker_data || !plenout || !preply )
    return -1 ;
 

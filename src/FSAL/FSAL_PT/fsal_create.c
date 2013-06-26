@@ -111,17 +111,15 @@ PTFSAL_create(fsal_handle_t      * p_parent_directory_handle, /* IN */
 
   /* retrieve file attributes */
   if(p_object_attributes) {
-    status = PTFSAL_getattrs(p_object_handle, 
+    if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) {
+      status = PTFSAL_setattrs(p_object_handle, 
                              p_context, 
-                             p_object_attributes);
+                             p_object_attributes, p_object_attributes);
 
-    /* on error, we set a special bit in the mask. */
-    if(FSAL_IS_ERROR(status)) {
-      FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-      FSAL_SET_MASK(p_object_attributes->asked_attributes, 
-                    FSAL_ATTR_RDATTR_ERR);
+      if(FSAL_IS_ERROR(status)) {
+        ReturnStatus(status, INDEX_FSAL_create);
+      }
     }
-
   }
 
   FSI_TRACE(FSI_DEBUG, "End to create file************************\n");
@@ -248,17 +246,16 @@ PTFSAL_mkdir(fsal_handle_t      * p_parent_directory_handle, /* IN */
 
   /* retrieve file attributes */
   if(p_object_attributes) {
-    FSI_TRACE(FSI_DEBUG, "MKDIR %d",__LINE__);
-    status = PTFSAL_getattrs(p_object_handle, p_context, 
-                             p_object_attributes);
+      FSI_TRACE(FSI_DEBUG, "MKDIR %d",__LINE__);
+      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) {
+        status = PTFSAL_setattrs(p_object_handle, 
+                                 p_context, 
+                                 p_object_attributes, p_object_attributes);
 
-    /* on error, we set a special bit in the mask. */
-    if(FSAL_IS_ERROR(status)) {
-      FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-      FSAL_SET_MASK(p_object_attributes->asked_attributes, 
-                    FSAL_ATTR_RDATTR_ERR);
-    }
-
+        if(FSAL_IS_ERROR(status)) {
+          ReturnStatus(status, INDEX_FSAL_mkdir);
+      }
+    }  
   }
   FSI_TRACE(FSI_INFO,"MKDIR END ------------------\n");
   FSI_TRACE(FSI_DEBUG, "MKDIR %d",__LINE__);

@@ -91,6 +91,7 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
   int                    convrc = 0;
   fsal_accessmode_t      mode = 0777;
   fsal_name_t            name;
+  cache_inode_file_type_t ftype = 1;
 #ifdef _USE_QUOTA
   fsal_status_t          fsal_status ;
 #endif
@@ -209,6 +210,7 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
   switch (arg_CREATE4.objtype.type)
     {
     case NF4LNK:
+      ftype = SYMBOLIC_LINK;      
       /* Convert the name to link from into a regular string */
       if(arg_CREATE4.objtype.createtype4_u.linkdata.utf8string_len == 0)
         {
@@ -227,26 +229,6 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
             }
         }
 
-      /* do the symlink operation */
-      if((pentry_new = cache_inode_create(pentry_parent,
-                                          &name,
-                                          SYMBOLIC_LINK,
-                                          mode,
-                                          &create_arg,
-                                          NULL,
-                                          data->pcontext, &cache_status)) == NULL)
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          return res_CREATE4.status;
-        }
-
-      /* If entry exists pentry_new is not null but cache_status was set */
-      if(cache_status == CACHE_INODE_ENTRY_EXISTS)
-        {
-          res_CREATE4.status = NFS4ERR_EXIST;
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
 
       break;
     case NF4DIR:
@@ -255,128 +237,34 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
       /* The create_arg structure contains the information "newly created directory"
        * to be passed to cache_inode_new_entry from cache_inode_create */
       create_arg.newly_created_dir = TRUE ;
+      ftype = DIRECTORY;
 
-      if((pentry_new = cache_inode_create(pentry_parent,
-                                          &name,
-                                          DIRECTORY,
-                                          mode,
-                                          &create_arg,
-                                          NULL,
-                                          data->pcontext, &cache_status)) == NULL)
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          return res_CREATE4.status;
-        }
-
-      /* If entry exists pentry_new is not null but cache_status was set */
-      if(cache_status == CACHE_INODE_ENTRY_EXISTS)
-        {
-          res_CREATE4.status = NFS4ERR_EXIST;
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
       break;
 
     case NF4SOCK:
 
-      /* Create a new socket file */
-      if((pentry_new = cache_inode_create(pentry_parent,
-                                          &name,
-                                          SOCKET_FILE,
-                                          mode,
-                                          NULL,
-                                          NULL,
-                                          data->pcontext, &cache_status)) == NULL)
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          return res_CREATE4.status;
-        }
+      ftype = SOCKET_FILE;
 
-      /* If entry exists pentry_new is not null but cache_status was set */
-      if(cache_status == CACHE_INODE_ENTRY_EXISTS)
-        {
-          res_CREATE4.status = NFS4ERR_EXIST;
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
       break;
 
     case NF4FIFO:
 
-      /* Create a new socket file */
-      if((pentry_new = cache_inode_create(pentry_parent,
-                                          &name,
-                                          FIFO_FILE,
-                                          mode,
-                                          NULL,
-                                          NULL,
-                                          data->pcontext, &cache_status)) == NULL)
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          return res_CREATE4.status;
-        }
-
-      /* If entry exists pentry_new is not null but cache_status was set */
-      if(cache_status == CACHE_INODE_ENTRY_EXISTS)
-        {
-          res_CREATE4.status = NFS4ERR_EXIST;
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
+      ftype = FIFO_FILE;
       break;
 
     case NF4CHR:
 
+      ftype = CHARACTER_FILE;
       create_arg.dev_spec.major = arg_CREATE4.objtype.createtype4_u.devdata.specdata1;
       create_arg.dev_spec.minor = arg_CREATE4.objtype.createtype4_u.devdata.specdata2;
-
-      /* Create a new socket file */
-      if((pentry_new = cache_inode_create(pentry_parent,
-                                          &name,
-                                          CHARACTER_FILE,
-                                          mode,
-                                          &create_arg,
-                                          NULL,
-                                          data->pcontext, &cache_status)) == NULL)
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          return res_CREATE4.status;
-        }
-
-      /* If entry exists pentry_new is not null but cache_status was set */
-      if(cache_status == CACHE_INODE_ENTRY_EXISTS)
-        {
-          res_CREATE4.status = NFS4ERR_EXIST;
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
       break;
 
     case NF4BLK:
 
+      ftype = BLOCK_FILE;
       create_arg.dev_spec.major = arg_CREATE4.objtype.createtype4_u.devdata.specdata1;
       create_arg.dev_spec.minor = arg_CREATE4.objtype.createtype4_u.devdata.specdata2;
 
-      /* Create a new socket file */
-      if((pentry_new = cache_inode_create(pentry_parent,
-                                          &name,
-                                          BLOCK_FILE,
-                                          mode,
-                                          &create_arg,
-                                          NULL,
-                                          data->pcontext, &cache_status)) == NULL)
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          return res_CREATE4.status;
-        }
-
-      /* If entry exists pentry_new is not null but cache_status was set */
-      if(cache_status == CACHE_INODE_ENTRY_EXISTS)
-        {
-          res_CREATE4.status = NFS4ERR_EXIST;
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
       break;
 
     default:
@@ -385,6 +273,33 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
       return res_CREATE4.status;
       break;
     }                           /* switch( arg_CREATE4.objtype.type ) */
+
+  /* If owner or owner_group are set, and the credential was
+   * squashed, then we must squash the set owner and owner_group.
+   */
+  squash_setattr(&data->export_perms,
+                 &data->pworker->user_credentials,
+                 &sattr);
+
+  if((pentry_new = cache_inode_create(pentry_parent,
+                                      &name,
+                                      ftype,
+                                      mode,
+                                      &create_arg,
+                                      &sattr,
+                                      data->pcontext, &cache_status)) == NULL)
+    {
+      res_CREATE4.status = nfs4_Errno(cache_status);
+      return res_CREATE4.status;
+    }
+ 
+  /* If entry exists pentry_new is not null but cache_status was set */
+  if(cache_status == CACHE_INODE_ENTRY_EXISTS)
+    {
+      res_CREATE4.status = NFS4ERR_EXIST;
+      cache_inode_put(pentry_new);
+      return res_CREATE4.status;
+    }
 
   /* Now produce the filehandle to this file */
   pnewfsal_handle = &pentry_new->handle;
@@ -412,31 +327,12 @@ int nfs4_op_create(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
   /* No do not need newfh any more */
   gsh_free(newfh4.nfs_fh4_val);
 
-  /* Set the mode if requested */
   /* Use the same fattr mask for reply, if one attribute was not settable, NFS4ERR_ATTRNOTSUPP was replyied */
   res_CREATE4.CREATE4res_u.resok4.attrset.bitmap4_len =
       arg_CREATE4.createattrs.attrmask.bitmap4_len;
 
   if(arg_CREATE4.createattrs.attrmask.bitmap4_len != 0)
     {
-      /* If owner or owner_group are set, and the credential was
-       * squashed, then we must squash the set owner and owner_group.
-       */
-      squash_setattr(&data->export_perms,
-                     &data->pworker->user_credentials,
-                     &sattr);
-
-      if((cache_status = cache_inode_setattr(pentry_new,
-                                             &sattr,
-                                             data->pcontext,
-                                             FALSE,
-                                             &cache_status)) != CACHE_INODE_SUCCESS)
-
-        {
-          res_CREATE4.status = nfs4_Errno(cache_status);
-          cache_inode_put(pentry_new);
-          return res_CREATE4.status;
-        }
 
       /* Allocate a new bitmap */
       res_CREATE4.CREATE4res_u.resok4.attrset.bitmap4_val =

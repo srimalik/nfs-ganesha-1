@@ -99,7 +99,6 @@ int nfs_Symlink(nfs_arg_t *parg,
   cache_inode_file_type_t parent_filetype;
   fsal_attrib_list_t parent_attr;
   fsal_attrib_list_t attr_symlink;
-  fsal_attrib_list_t attributes_symlink;
   fsal_attrib_list_t attr_parent_after;
   fsal_attrib_list_t *ppre_attr;
   cache_inode_status_t cache_status;
@@ -235,6 +234,37 @@ int nfs_Symlink(nfs_arg_t *parg,
     }
   else
     {
+      attr_symlink.asked_attributes = 0ULL;
+
+       switch (preq->rq_vers)
+         {
+           case NFS_V2:
+             if(nfs2_Sattr_To_FSALattr(&attr_symlink,
+                                       &parg->arg_create2.attributes) == 0)
+               {
+                 pres->res_dirop2.status = NFSERR_IO;
+                 rc = NFS_REQ_OK;
+                 goto out;
+                 break;
+               }
+             break;
+
+           case NFS_V3:
+             if(nfs3_Sattr_To_FSALattr(&attr_symlink,
+                                       &parg->arg_create3.how.createhow3_u.
+                                       obj_attributes) == 0)
+               {
+                 pres->res_create3.status = NFS3ERR_INVAL;
+                 rc = NFS_REQ_OK;
+                 goto out;
+               }
+             break;
+           }
+         squash_setattr(&pworker->export_perms,
+                                 &pworker->user_credentials,
+                                 &attr_symlink);
+
+
       /* Make the symlink */
       if((symlink_pentry = cache_inode_create(parent_pentry,
                                               &symlink_name,
@@ -255,48 +285,7 @@ int nfs_Symlink(nfs_arg_t *parg,
               pfsal_handle = &symlink_pentry->handle;
 
               /* Some clients (like the Spec NFS benchmark) set attributes with the NFSPROC3_SYMLINK request */
-              if(nfs3_Sattr_To_FSALattr(&attributes_symlink,
-                                        &parg->arg_symlink3.symlink.symlink_attributes) == 0)
-                {
-                  pres->res_create3.status = NFS3ERR_INVAL;
-                  rc = NFS_REQ_OK;
-                  goto out;
-                }
 
-              /* Mode is managed above (in cache_inode_create), there is no need 
-               * to manage it */
-              if(attributes_symlink.asked_attributes & FSAL_ATTR_MODE)
-                attributes_symlink.asked_attributes &= ~FSAL_ATTR_MODE;
-
-              /* Some clients (like Solaris 10) try to set the size of the file to 0
-               * at creation time. The FSAL create empty file, so we ignore this */
-              if(attributes_symlink.asked_attributes & FSAL_ATTR_SIZE)
-                attributes_symlink.asked_attributes &= ~FSAL_ATTR_SIZE;
-
-              if(attributes_symlink.asked_attributes & FSAL_ATTR_SPACEUSED)
-                attributes_symlink.asked_attributes &= ~FSAL_ATTR_SPACEUSED;
-
-              /* If owner or owner_group are set, and the credential was
-               * squashed, then we must squash the set owner and owner_group.
-               */
-              squash_setattr(&pworker->export_perms,
-                             &pworker->user_credentials,
-                             &attributes_symlink);
-
-              /* Are there attributes to be set (additional to the mode) ? */
-              if(attributes_symlink.asked_attributes != 0ULL &&
-                 attributes_symlink.asked_attributes != FSAL_ATTR_MODE)
-                {
-                  /* A call to cache_inode_setattr is required */
-                  if(cache_inode_setattr(symlink_pentry,
-                                         &attributes_symlink,
-                                         pcontext,
-                                         FALSE,
-                                         &cache_status) != CACHE_INODE_SUCCESS)
-                    {
-                      goto out_error;
-                    }
-                }
 
               if ((pres->res_symlink3.status =
                    (nfs3_AllocateFH(&pres->res_symlink3.SYMLINK3res_u
@@ -360,7 +349,6 @@ int nfs_Symlink(nfs_arg_t *parg,
         }
     }
 
-out_error:
   rc = nfs_SetFailedStatus(pexport, preq->rq_vers, cache_status,
                            &pres->res_stat2, &pres->res_symlink3.status,
                            NULL, ppre_attr,

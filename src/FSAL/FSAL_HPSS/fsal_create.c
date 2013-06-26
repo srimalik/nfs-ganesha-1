@@ -156,20 +156,19 @@ fsal_status_t HPSSFSAL_create(hpssfsal_handle_t * parent_directory_handle,      
 
   if(object_attributes)
     {
-
       fsal_status_t status;
 
-      /* convert hpss attributes to fsal attributes */
-
-      status = hpss2fsal_attributes(&new_hdl, &new_attrs, object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(object_attributes->asked_attributes);
-          FSAL_SET_MASK(object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+          status = HPSSFSAL_setattrs(object_handle, p_context, object_attributes, object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_create);
+            }
+        }  
     }
 
   /* OK */
@@ -278,16 +277,17 @@ fsal_status_t HPSSFSAL_mkdir(hpssfsal_handle_t * parent_directory_handle,       
 
       fsal_status_t status;
 
-      /* convert hpss attributes to fsal attributes */
-
-      status = hpss2fsal_attributes(&lnk_hdl, &lnk_attr, object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
+      /* Mode is handled in create, skip setattrs if mode is the 
+       * only attribute 
+       */
+      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
         {
-          FSAL_CLEAR_MASK(object_attributes->asked_attributes);
-          FSAL_SET_MASK(object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
+          status = HPSSFSAL_setattrs(object_handle, p_context, object_attributes, object_attributes )
+          if(FSAL_IS_ERROR(status))
+            {
+              ReturnStatus(status, INDEX_FSAL_mkdir);
+            }
+        }  
     }
 
   /* OK */

@@ -247,7 +247,7 @@ fsal_status_t ZFSFSAL_setattrs(fsal_handle_t * fhandle, /* IN */
 
   if(object_attributes)
     {
-
+      object_attributes->asked_attributes = global_fs_info.supported_attrs;
       status = ZFSFSAL_getattrs((zfsfsal_handle_t *)filehandle, p_context, object_attributes);
 
       /* on error, we set a special bit in the mask. */

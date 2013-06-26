@@ -22,6 +22,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+extern fsal_status_t gpfsfsal_xstat_2_fsal_attributes(gpfsfsal_xstat_t *p_buffxstat, 
+                                                      fsal_attrib_list_t *p_fsalattr_out);
+
+extern fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_attributes, 
+                                                      gpfsfsal_xstat_t *p_buffxstat, 
+                                                      int * p_attr_valid, 
+                                                      int * p_attr_changed);
+
+#ifdef _USE_NFS4_ACL
+extern fsal_status_t fsal_acl_2_gpfs_acl(fsal_acl_t *p_fsalacl, gpfsfsal_xstat_t *p_buffxstat);
+#endif                          /* _USE_NFS4_ACL */
+
+
 /**
  * FSAL_create:
  * Create a regular file.
@@ -45,6 +58,8 @@
  *        and the output is built considering this input
  *        (it fills the structure according to the flags it contains).
  *        May be NULL.
+ * \param p_asked_attributes (input):
+ *        attribute list which is to be returned in link_attributes.
  *
  * \return Major error codes :
  *        - ERR_FSAL_NO_ERROR     (no error)
@@ -55,11 +70,12 @@ fsal_status_t GPFSFSAL_create(fsal_handle_t * p_parent_directory_handle,    /* I
                           fsal_op_context_t * p_context,        /* IN */
                           fsal_accessmode_t accessmode, /* IN */
                           fsal_handle_t * p_object_handle,      /* OUT */
-                          fsal_attrib_list_t * p_object_attributes      /* [ IN/OUT ] */
+                          fsal_attrib_list_t * p_object_attributes     /* [ IN/OUT ] */
     )
 {
   fsal_status_t status;
-
+  gpfsfsal_xstat_t buffxstat;
+  int attr_valid = 0, attr_changed = 0;
   mode_t unix_mode;
 
   /* sanity checks.
@@ -75,35 +91,32 @@ fsal_status_t GPFSFSAL_create(fsal_handle_t * p_parent_directory_handle,    /* I
   unix_mode = unix_mode & ~global_fs_info.umask;
 
   LogFullDebug(COMPONENT_FSAL, "Creation mode: 0%o", accessmode);
-
+  
   /* call to filesystem */
+  status = gpfsfsal_fsal_attributes_2_xstat(p_object_attributes, &buffxstat, &attr_valid, &attr_changed);
+  if(FSAL_IS_ERROR(status))
+    ReturnStatus(status, INDEX_FSAL_create);
 
   fsal_set_credentials(p_context);
   TakeTokenFSCall();
   status = fsal_internal_create(p_context, p_parent_directory_handle,
                                 p_filename, unix_mode | S_IFREG, 0,
-                                p_object_handle, NULL);
+                                p_object_handle, attr_valid, attr_changed, &buffxstat);
   ReleaseTokenFSCall();
   fsal_restore_ganesha_credentials();
   if(FSAL_IS_ERROR(status))
     ReturnStatus(status, INDEX_FSAL_create);
 
-  /* retrieve file attributes */
-  if(p_object_attributes)
+  /* Get all supported attributes and let the Cache inode layer do the filtering */
+  p_object_attributes->asked_attributes = global_fs_info.supported_attrs;
+  status = gpfsfsal_xstat_2_fsal_attributes(&buffxstat, p_object_attributes);
+  if(FSAL_IS_ERROR(status))
     {
-      status = GPFSFSAL_getattrs(p_object_handle, p_context, p_object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
-        {
-          FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-          FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+      FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
+      FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
     }
 
-  // error injection to test DRC
-  //sleep(61);
+
   /* OK */
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_create);
 
@@ -133,6 +146,9 @@ fsal_status_t GPFSFSAL_create(fsal_handle_t * p_parent_directory_handle,    /* I
  *        and the output is built considering this input
  *        (it fills the structure according to the flags it contains).
  *        May be NULL.
+ * \param p_asked_attributes (input):
+ *        attribute list which is to be returned in link_attributes.
+ *
  *
  * \return Major error codes :
  *        - ERR_FSAL_NO_ERROR     (no error)
@@ -143,12 +159,14 @@ fsal_status_t GPFSFSAL_mkdir(fsal_handle_t * p_parent_directory_handle,     /* I
                          fsal_op_context_t * p_context, /* IN */
                          fsal_accessmode_t accessmode,  /* IN */
                          fsal_handle_t * p_object_handle,       /* OUT */
-                         fsal_attrib_list_t * p_object_attributes       /* [ IN/OUT ] */
+                         fsal_attrib_list_t * p_object_attributes      /* [ IN/OUT ] */
     )
 {
 /*   int setgid_bit = 0; */
   mode_t unix_mode;
   fsal_status_t status;
+  int attr_valid = 0, attr_changed = 0;
+  gpfsfsal_xstat_t buffxstat;
 
   /* sanity checks.
    * note : object_attributes is optional.
@@ -165,31 +183,29 @@ fsal_status_t GPFSFSAL_mkdir(fsal_handle_t * p_parent_directory_handle,     /* I
   /* build new entry path */
 
   /* creates the directory and get its handle */
+  status = gpfsfsal_fsal_attributes_2_xstat(p_object_attributes, &buffxstat, &attr_valid, &attr_changed);
+  if(FSAL_IS_ERROR(status))
+    ReturnStatus(status, INDEX_FSAL_create);
 
   fsal_set_credentials(p_context);
 
   TakeTokenFSCall();
   status = fsal_internal_create(p_context, p_parent_directory_handle,
                                 p_dirname, unix_mode | S_IFDIR, 0,
-                                p_object_handle, NULL);
+                                p_object_handle, attr_valid, attr_changed, &buffxstat);
   ReleaseTokenFSCall();
   fsal_restore_ganesha_credentials();
 
   if(FSAL_IS_ERROR(status))
     ReturnStatus(status, INDEX_FSAL_mkdir);
 
-  /* retrieve file attributes */
-  if(p_object_attributes)
+  /* Get all supported attributes and let the Cache inode layer do the filtering */
+  p_object_attributes->asked_attributes = global_fs_info.supported_attrs;
+  status = gpfsfsal_xstat_2_fsal_attributes(&buffxstat, p_object_attributes);
+  if(FSAL_IS_ERROR(status))
     {
-      status = GPFSFSAL_getattrs(p_object_handle, p_context, p_object_attributes);
-
-      /* on error, we set a special bit in the mask. */
-      if(FSAL_IS_ERROR(status))
-        {
-          FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
-          FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+      FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);
+      FSAL_SET_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
     }
 
   /* OK */
@@ -303,6 +319,8 @@ fsal_status_t GPFSFSAL_mknode(fsal_handle_t * parentdir_handle,     /* IN */
   fsal_status_t status;
 /*   int flags=(O_RDONLY|O_NOFOLLOW); */
   mode_t unix_mode = 0;
+  int attr_valid = 0, attr_changed = 0;
+  gpfsfsal_xstat_t buffxstat;
   dev_t unix_dev = 0;
 
   /* sanity checks.
@@ -347,12 +365,16 @@ fsal_status_t GPFSFSAL_mknode(fsal_handle_t * parentdir_handle,     /* IN */
       Return(ERR_FSAL_INVAL, 0, INDEX_FSAL_mknode);
     }
 
+  status = gpfsfsal_fsal_attributes_2_xstat(node_attributes, &buffxstat, &attr_valid, &attr_changed);
+  if(FSAL_IS_ERROR(status))
+    ReturnStatus(status, INDEX_FSAL_mknode);
+
   fsal_set_credentials(p_context);
 
   TakeTokenFSCall();
   status = fsal_internal_create(p_context, parentdir_handle,
                                 p_node_name, unix_mode, unix_dev,
-                                p_object_handle, NULL);
+                                p_object_handle, attr_valid, attr_changed, &buffxstat);
   ReleaseTokenFSCall();
 
   fsal_restore_ganesha_credentials();
@@ -360,20 +382,13 @@ fsal_status_t GPFSFSAL_mknode(fsal_handle_t * parentdir_handle,     /* IN */
   if(FSAL_IS_ERROR(status))
     ReturnStatus(status, INDEX_FSAL_mknode);
 
-  /* Fills the attributes if needed */
-  if(node_attributes)
+  /* Get all supported attributes and let the Cache inode layer do the filtering */
+  node_attributes->asked_attributes = global_fs_info.supported_attrs;
+  status = gpfsfsal_xstat_2_fsal_attributes(&buffxstat, node_attributes);
+  if(FSAL_IS_ERROR(status))
     {
-
-      status = GPFSFSAL_getattrs(p_object_handle, p_context, node_attributes);
-
-      /* on error, we set a special bit in the mask. */
-
-      if(FSAL_IS_ERROR(status))
-        {
-          FSAL_CLEAR_MASK(node_attributes->asked_attributes);
-          FSAL_SET_MASK(node_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
-        }
-
+      FSAL_CLEAR_MASK(node_attributes->asked_attributes);
+      FSAL_SET_MASK(node_attributes->asked_attributes, FSAL_ATTR_RDATTR_ERR);
     }
 
   /* Finished */

@@ -838,11 +838,14 @@ fsal_status_t fsal_internal_create(fsal_op_context_t * p_context,
                                    fsal_name_t * p_stat_name,
                                    mode_t mode, dev_t dev,
                                    fsal_handle_t * p_new_handle,
-                                   struct stat *buf)
+                                   int attr_valid,
+                                   int attr_changed,
+                                   gpfsfsal_xstat_t *p_buffxstat)
 {
   int rc;
   int dirfd = 0;
   struct create_name_arg crarg;
+
 #ifdef _VALGRIND_MEMCHECK
   gpfsfsal_handle_t * p_handle = (gpfsfsal_handle_t *)p_new_handle;
 #endif
@@ -857,7 +860,7 @@ fsal_status_t fsal_internal_create(fsal_op_context_t * p_context,
 #endif
 
   crarg.mountdirfd = dirfd;
-  crarg.mode = mode;
+  crarg.mode = mode; 
   crarg.dev = dev;
   crarg.len = p_stat_name->len;
   crarg.name = p_stat_name->name;
@@ -866,13 +869,25 @@ fsal_status_t fsal_internal_create(fsal_op_context_t * p_context,
   crarg.new_fh->handle_size = OPENHANDLE_HANDLE_LEN;
   crarg.new_fh->handle_key_size = OPENHANDLE_KEY_LEN;
   crarg.new_fh->handle_version = OPENHANDLE_VERSION;
-  crarg.buf = buf;
+  crarg.buf = &p_buffxstat->buffstat;
+  crarg.attr_valid = attr_valid;
+  /* clear mode in  buffstat */
+  attr_changed &= ~FSAL_ATTR_MODE;
 
-  rc = gpfs_ganesha(OPENHANDLE_CREATE_BY_NAME, &crarg);
+  crarg.attr_changed = attr_changed;
+  crarg.acl = (gpfs_acl_t *)p_buffxstat->buffacl;
+  crarg.acl->acl_len = GPFS_ACL_BUF_SIZE;
+  
+  rc = gpfs_ganesha(OPENHANDLE_CREATE_BY_NAME_ATTR, &crarg);
 
   if(rc < 0)
     ReturnCode(posix2fsal_error(errno), errno);
 
+#ifdef _USE_NFS4_ACL
+  p_buffxstat->attr_valid = XATTR_STAT | XATTR_ACL;
+#else
+  p_buffxstat->attr_valid = XATTR_STAT;
+#endif
 
   ReturnCode(ERR_FSAL_NO_ERROR, 0);
 }

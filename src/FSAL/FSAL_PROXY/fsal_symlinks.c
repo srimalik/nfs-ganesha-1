@@ -396,7 +396,16 @@ fsal_status_t PROXYFSAL_symlink(fsal_handle_t * parent_directory_handle,   /* IN
        GETFH4res_u.resok4.object), FSAL_TYPE_LNK, attributes.fileid,
       link_handle) == FALSE)
     Return(ERR_FSAL_FAULT, 0, INDEX_FSAL_symlink);
+   
 
+  if(link_attributes)
+    {
+      status = PROXYFSAL_setattrs(link_handle, context, link_attributes,  link_attributes )
+      if(FSAL_IS_ERROR(status))
+        {
+          ReturnStatus(status, INDEX_FSAL_symlink);
+        }
+    }
   /* OK */
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_symlink);
 }
