@@ -569,6 +569,7 @@ fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_att
                               int * p_attr_changed)
 {
   fsal_status_t status = {0, 0};
+
   if(!global_fs_info.cansettime)
     {
       if(p_object_attributes->asked_attributes
@@ -588,29 +589,30 @@ fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_att
      */
     *p_attr_changed |= XATTR_SIZE;
     p_buffxstat->buffstat.st_size = p_object_attributes->filesize;
-    LogDebug(COMPONENT_FSAL,"Setting size on a new object");
+    LogDebug(COMPONENT_FSAL,"Object size = %llu", (unsigned long long)p_buffxstat->buffstat.st_size);
   }
 
   if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_MODE))
     {
       *p_attr_changed |= XATTR_MODE;
-      //TODO: use buf.st_mode for now and check from marc which one is to be used. remove one of them
-      p_buffxstat->buffstat.st_mode = fsal2unix_mode(p_object_attributes->mode & (~global_fs_info.umask));
-      LogDebug(COMPONENT_FSAL, "object mode = %o", p_buffxstat->buffstat.st_mode);
+      /* TODO: Masking mode using global_fs_info.umask is not done 
+       * all other instances should also be removed.*/
+      p_buffxstat->buffstat.st_mode = fsal2unix_mode(p_object_attributes->mode);
+      LogDebug(COMPONENT_FSAL, "Object mode = %o", p_buffxstat->buffstat.st_mode);
     }
 
  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_OWNER)) 
    {
      *p_attr_changed |= XATTR_UID;
      p_buffxstat->buffstat.st_uid = p_object_attributes->owner;
-     LogDebug(COMPONENT_FSAL, "object owner uid = %d", p_buffxstat->buffstat.st_uid);
+     LogDebug(COMPONENT_FSAL, "Object owner uid = %d", p_buffxstat->buffstat.st_uid);
    }
 
  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_GROUP))
    {
      *p_attr_changed |= XATTR_GID;
      p_buffxstat->buffstat.st_gid = p_object_attributes->group;
-     LogDebug(COMPONENT_FSAL, "object owner gid = %d", p_buffxstat->buffstat.st_gid);
+     LogDebug(COMPONENT_FSAL, "Object owner gid = %d", p_buffxstat->buffstat.st_gid);
    }
 
   if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_ATIME))
@@ -618,7 +620,7 @@ fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_att
       *p_attr_changed |= XATTR_ATIME;
       p_buffxstat->buffstat.st_atime = p_object_attributes->atime.seconds;
       p_buffxstat->buffstat.st_atim.tv_nsec = p_object_attributes->atime.nseconds;
-      LogDebug(COMPONENT_FSAL, "object atime = %lu", p_buffxstat->buffstat.st_atime);
+      LogDebug(COMPONENT_FSAL, "Object atime = %lu", p_buffxstat->buffstat.st_atime);
     }
 
   if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_MTIME))
@@ -629,7 +631,18 @@ fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_att
       LogDebug(COMPONENT_FSAL, "object atime = %lu", p_buffxstat->buffstat.st_atime);
     }
 
-  /* Setting to server time is implicit in create */
+  /* Setting to server time is implicit in create, set it explicitly to support setattr */
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_ATIME_SERVER))
+    {
+      *p_attr_changed |= XATTR_ATIME_NOW;
+      LogDebug(COMPONENT_FSAL,"atime set to NOW");
+    }
+
+  if(FSAL_TEST_MASK(p_object_attributes->asked_attributes, FSAL_ATTR_MTIME_SERVER))
+    {
+      *p_attr_changed |= XATTR_MTIME_NOW;
+      LogDebug(COMPONENT_FSAL,"mtime set to NOW");
+    }
 
   if(*p_attr_changed !=0) 
     *p_attr_valid |= XATTR_STAT;
@@ -640,14 +653,14 @@ fsal_status_t gpfsfsal_fsal_attributes_2_xstat(fsal_attrib_list_t * p_object_att
       if(p_object_attributes->acl)
       {
         *p_attr_valid |= XATTR_ACL;
-        LogDebug(COMPONENT_FSAL, "create acl = %p", p_object_attributes->acl);
+        LogDebug(COMPONENT_FSAL, "ACL = %p", p_object_attributes->acl);
         status = fsal_acl_2_gpfs_acl(p_object_attributes->acl, p_buffxstat);
         if(FSAL_IS_ERROR(status))
           return(status);
       }
     else
       {
-        LogCrit(COMPONENT_FSAL, "create acl is NULL");
+        LogCrit(COMPONENT_FSAL, "ACL is NULL");
         status.major = ERR_FSAL_FAULT;
         return(status);
       }
