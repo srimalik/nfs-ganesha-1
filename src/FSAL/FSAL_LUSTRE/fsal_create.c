@@ -159,7 +159,7 @@ fsal_status_t LUSTREFSAL_create(fsal_handle_t * p_parent_directory_handle,      
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = LUSTERFSAL_setattrs(p_object_handle, p_context, p_object_attributes, p_object_attributes )
           if(FSAL_IS_ERROR(status))
@@ -299,7 +299,7 @@ fsal_status_t LUSTREFSAL_mkdir(fsal_handle_t * p_parent_directory_handle, /* IN 
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = LUSTERFSAL_setattrs(p_object_handle, p_context, p_object_attributes,  p_object_attributes )
           if(FSAL_IS_ERROR(status))
@@ -547,7 +547,7 @@ fsal_status_t LUSTREFSAL_mknode(fsal_handle_t * parentdir_handle, /* IN */
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(node_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((node_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = LUSTERFSAL_setattrs(p_object_handle, p_context, node_attributes, node_attributes )
           if(FSAL_IS_ERROR(status))

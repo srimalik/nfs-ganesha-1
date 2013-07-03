@@ -250,7 +250,7 @@ fsal_status_t VFSFSAL_symlink(fsal_handle_t * p_parent_directory_handle,   /* IN
 
   if(p_link_attributes)
     {
-      status = VFSFSAL_setattrs(p_link_handle, p_context, p_link_attributes);
+      status = VFSFSAL_setattrs(p_link_handle, p_context, p_link_attributes, p_link_attributes);
 
       if(FSAL_IS_ERROR(status))
         {

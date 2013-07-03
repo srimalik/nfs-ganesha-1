@@ -106,7 +106,7 @@ fsal_status_t ZFSFSAL_create(fsal_handle_t * parent_hdl,      /* IN */
 
   if(object_attributes)
     {
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) 
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL) 
         {      
           fsal_status_t status = ZFSFSAL_setattrs(obj_handle, context, object_attributes, object_attributes);
 
@@ -218,7 +218,7 @@ fsal_status_t ZFSFSAL_mkdir(fsal_handle_t * parent_hdl,       /* IN */
   if(object_attributes)
     {
       /**@TODO: skip this => libzfswrap_mkdir might return attributes */
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           fsal_status_t status = ZFSFSAL_setattrs(obj_handle, context, object_attributes, object_attributes);
 

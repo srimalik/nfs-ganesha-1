@@ -157,7 +157,7 @@ fsal_status_t POSIXFSAL_create(fsal_handle_t * parent_directory_handle,  /* IN *
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = POSIXFSAL_setattrs(object_handle, context, p_object_attributes, p_object_attributes )
           if(FSAL_IS_ERROR(status))
@@ -295,7 +295,7 @@ fsal_status_t POSIXFSAL_mkdir(fsal_handle_t * parent_directory_handle,   /* IN *
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = POSIXFSAL_setattrs(object_handle, context, p_object_attributes, p_object_attributes )
           if(FSAL_IS_ERROR(status))
@@ -573,7 +573,7 @@ fsal_status_t POSIXFSAL_mknode(fsal_handle_t * parentdir_hdl,   /* IN */
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(p_node_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((p_node_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = POSIXFSAL_setattrs(object_handle, context, node_attributes, node_attributes )
           if(FSAL_IS_ERROR(status))

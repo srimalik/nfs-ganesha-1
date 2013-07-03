@@ -111,7 +111,7 @@ PTFSAL_create(fsal_handle_t      * p_parent_directory_handle, /* IN */
 
   /* retrieve file attributes */
   if(p_object_attributes) {
-    if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) {
+    if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL) {
       status = PTFSAL_setattrs(p_object_handle, 
                              p_context, 
                              p_object_attributes, p_object_attributes);
@@ -247,7 +247,7 @@ PTFSAL_mkdir(fsal_handle_t      * p_parent_directory_handle, /* IN */
   /* retrieve file attributes */
   if(p_object_attributes) {
       FSI_TRACE(FSI_DEBUG, "MKDIR %d",__LINE__);
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) {
+      if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL) {
         status = PTFSAL_setattrs(p_object_handle, 
                                  p_context, 
                                  p_object_attributes, p_object_attributes);

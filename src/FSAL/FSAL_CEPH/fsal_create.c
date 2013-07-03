@@ -131,7 +131,7 @@ fsal_status_t CEPHFSAL_create(fsal_handle_t * extparent,
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = CEPHFSAL_setattrs(object_handle, extcontext, object_attributes,  object_attributes )
           if(FSAL_IS_ERROR(status))
@@ -234,7 +234,7 @@ fsal_status_t CEPHFSAL_mkdir(fsal_handle_t * extparent,
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = CEPHFSAL_setattrs(object_handle, extcontext, object_attributes, object_attributes )
           if(FSAL_IS_ERROR(status))

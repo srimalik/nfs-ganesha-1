@@ -161,7 +161,7 @@ fsal_status_t HPSSFSAL_create(hpssfsal_handle_t * parent_directory_handle,      
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = HPSSFSAL_setattrs(object_handle, p_context, object_attributes, object_attributes )
           if(FSAL_IS_ERROR(status))
@@ -280,7 +280,7 @@ fsal_status_t HPSSFSAL_mkdir(hpssfsal_handle_t * parent_directory_handle,       
       /* Mode is handled in create, skip setattrs if mode is the 
        * only attribute 
        */
-      if(object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL)
+      if((object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL)
         {
           status = HPSSFSAL_setattrs(object_handle, p_context, object_attributes, object_attributes )
           if(FSAL_IS_ERROR(status))

@@ -159,9 +159,9 @@ fsal_status_t VFSFSAL_create(fsal_handle_t * p_parent_directory_handle,      /* 
   /* retrieve file attributes */
   if(p_object_attributes)
     {
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) 
+      if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL) 
         {
-          status = VFSFSAL_settrs(p_object_handle, p_context, p_object_attributes, p_object_attributes);
+          status = VFSFSAL_setattrs(p_object_handle, p_context, p_object_attributes, p_object_attributes);
 
           if(FSAL_IS_ERROR(status))
             {
@@ -320,7 +320,7 @@ fsal_status_t VFSFSAL_mkdir(fsal_handle_t * p_parent_directory_handle,       /* 
   /* retrieve file attributes */
   if(p_object_attributes)
     {
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) 
+      if((p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL) 
         {
           status = VFSFSAL_setattrs(p_object_handle, p_context, p_object_attributes, p_object_attributes);
 
@@ -610,7 +610,7 @@ fsal_status_t VFSFSAL_mknode(fsal_handle_t * parentdir_handle,       /* IN */
   if(node_attributes)
     {
 
-      if(p_object_attributes->asked_attributes & ~FSAL_ATTR_MODE != 0ULL) 
+      if((node_attributes->asked_attributes & ~FSAL_ATTR_MODE) != 0ULL) 
         {  
           status = VFSFSAL_setattrs(p_object_handle, p_context, node_attributes, node_attributes);
 
