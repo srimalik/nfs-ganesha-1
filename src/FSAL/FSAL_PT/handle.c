@@ -345,24 +345,6 @@ static fsal_status_t linkfile(struct fsal_obj_handle *obj_hdl,
 	return fsalstat(ERR_FSAL_NOTSUPP, 0);
 }
 
-/* not defined in linux headers so we do it here
- */
-
-struct linux_dirent {
-	unsigned long d_ino;	/* Inode number */
-	unsigned long d_off;	/* Offset to next linux_dirent */
-	unsigned short d_reclen;	/* Length of this linux_dirent */
-	char d_name[];		/* Filename (null-terminated) */
-	/* length is actually (d_reclen - 2 -
-	 * offsetof(struct linux_dirent, d_name)
-	 */
-	/*
-	   char           pad;       // Zero padding byte
-	   char           d_type;    // File type (only since Linux 2.6.4;
-	   // offset is (d_reclen - 1))
-	 */
-};
-
 /**
  * read_dirents
  * read the directory and call through the callback function for
@@ -543,62 +525,6 @@ static fsal_status_t setattrs(struct fsal_obj_handle *obj_hdl,
 	return (status);
 }
 
-/* compare
- * compare two handles.
- * return true for equal, false for anything else
- */
-bool compare(struct fsal_obj_handle * obj_hdl,
-	     struct fsal_obj_handle * other_hdl)
-{
-	struct pt_fsal_obj_handle *myself, *other;
-
-	if (obj_hdl == other_hdl)
-		return true;
-	if (!other_hdl)
-		return false;
-	myself = container_of(obj_hdl, struct pt_fsal_obj_handle, obj_handle);
-	other = container_of(other_hdl, struct pt_fsal_obj_handle, obj_handle);
-	if ((obj_hdl->type != other_hdl->type)
-	    || (myself->handle->data.handle.handle_type !=
-		other->handle->data.handle.handle_type)
-	    || (myself->handle->data.handle.handle_size !=
-		other->handle->data.handle.handle_size))
-		return false;
-	return memcmp(myself->handle->data.handle.f_handle,
-		      other->handle->data.handle.f_handle,
-		      myself->handle->data.handle.handle_size) ? false : true;
-}
-
-/* file_truncate
- * truncate a file to the size specified.
- * size should really be off_t...
- */
-/*
-static fsal_status_t file_truncate(struct fsal_obj_handle *obj_hdl,
-                                   const struct req_op_context *opctx,
-				   uint64_t length)
-{
-	fsal_errors_t fsal_error = ERR_FSAL_NO_ERROR;
-        fsal_status_t status;
-	struct pt_fsal_obj_handle *myself;
-	int mount_fd;
-	int retval = 0;
-
-	if(obj_hdl->type != REGULAR_FILE) {
-		fsal_error = ERR_FSAL_INVAL;
-		goto errout;
-	}
-	myself = container_of(obj_hdl, struct pt_fsal_obj_handle, obj_handle);
-	mount_fd = pt_get_root_fd(obj_hdl->export);
-	
-	status = PTFSAL_truncate(obj_hdl->export, myself, opctx, length, NULL);
-	return (status);
-
-errout:
-	return fsalstat(fsal_error, retval);	
-}
-*/
-
 /* file_unlink
  * unlink the named file in the directory
  */
@@ -725,25 +651,6 @@ static fsal_status_t release(struct fsal_obj_handle *obj_hdl)
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
-
-/* pt_share_op
- */
-#if 0
-static fsal_status_t share_op(struct fsal_obj_handle *obj_hdl, void *p_owner,
-			      fsal_share_param_t request_share)
-{
-	fsal_status_t status;
-	int fd, mntfd;
-	struct pt_fsal_obj_handle *myself;
-
-	myself = container_of(obj_hdl, struct pt_fsal_obj_handle, obj_handle);
-	mntfd = fd = myself->u.file.fd;
-
-	status = PTFSAL_share_op(mntfd, fd, p_owner, request_share);
-
-	return (status);
-}
-#endif
 
 void pt_handle_ops_init(struct fsal_obj_ops *ops)
 {

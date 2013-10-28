@@ -60,15 +60,6 @@
 
 #include "pt_ganesha.h"
 
-/* credential lifetime (1h) */
-uint32_t CredentialLifetime = 3600;
-
-/* static filesystem info.
- * The access is thread-safe because
- * it is read-only, except during initialization.
- */
-struct fsal_staticfsinfo_t global_fs_info;
-
 static fsal_status_t fsal_internal_testAccess_no_acl(const struct req_op_context *p_context,	/* IN */
 						     fsal_accessflags_t access_type,	/* IN */
 						     struct attrlist *p_object_attributes);	/* IN */
@@ -290,28 +281,6 @@ fsal_status_t fsal_internal_get_handle_at(const struct req_op_context * p_contex
 }
 
 /**
- * fsal_internal_fd2handle:
- * convert an fd to a handle
- *
- * \param fd (input):
- *        Open file descriptor for target file
- * \param p_handle (output):
- *        The handle that is found and returned
- *
- * \return status of operation
- */
-fsal_status_t fsal_internal_fd2handle(int fd, ptfsal_handle_t * p_handle)
-{
-
-	FSI_TRACE(FSI_DEBUG, "FSI - fd2handle\n");
-
-	if (!p_handle)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	return fsalstat(ERR_FSAL_NO_ERROR, 0);
-}
-
-/**
  * fsal_readlink_by_handle:
  * Reads the contents of the link
  *
@@ -358,75 +327,6 @@ fsal_status_t fsal_internal_testAccess(const struct req_op_context * p_context,	
 	LogDebug(COMPONENT_FSAL, "invalid access_type = 0X%x", access_type);
 
 	return fsalstat(ERR_FSAL_ACCESS, 0);
-}
-
-/* Check the access at the file system. It is called when Use_Test_Access 
- * = 0. 
- */
-fsal_status_t fsal_internal_access(int mntfd,	/* IN */
-				   const struct req_op_context * p_context,	/* IN */
-				   ptfsal_handle_t * p_handle,	/* IN */
-				   fsal_accessflags_t access_type,	/* IN */
-				   struct attrlist * p_object_attributes)
-{				/* IN */
-	fsal_status_t status;
-	fsal_accessflags_t v4mask = 0;
-	mode_t mode = 0;
-
-	FSI_TRACE(FSI_DEBUG, "FSI - access\n");
-
-	/* sanity checks. */
-	if (!p_context || !p_handle)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	if (IS_FSAL_ACE4_MASK_VALID(access_type))
-		v4mask = FSAL_ACE4_MASK(access_type);
-
-	if (IS_FSAL_MODE_MASK_VALID(access_type))
-		mode = FSAL_MODE_MASK(access_type);
-
-	LogDebug(COMPONENT_FSAL, "requested v4mask=0x%x, mode=0x%x", v4mask,
-		 mode);
-
-	status =
-	    fsal_internal_testAccess(p_context, access_type,
-				     p_object_attributes);
-
-	return status;
-}
-
-/* Get NFS4 ACL as well as stat. For now, get stat only until NFS4 ACL
- * support is enabled. */
-fsal_status_t fsal_get_xstat_by_handle(int dirfd,
-				       struct pt_file_handle * p_handle,
-				       ptfsal_xstat_t * p_buffxstat)
-{
-
-	FSI_TRACE(FSI_DEBUG, "FSI - get_xstat_by_handle\n");
-
-	if (!p_handle || !p_buffxstat)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	memset(p_buffxstat, 0, sizeof(ptfsal_xstat_t));
-
-	// figure out what to return
-	return fsalstat(ERR_FSAL_NO_ERROR, 0);
-}
-
-/* Set NFS4 ACL as well as stat. For now, set stat only until NFS4 ACL
- * support is enabled. */
-fsal_status_t fsal_set_xstat_by_handle(int dirfd,
-				       const struct req_op_context * p_context,
-				       struct pt_file_handle * p_handle,
-				       int attr_valid, int attr_changed,
-				       ptfsal_xstat_t * p_buffxstat)
-{
-	FSI_TRACE(FSI_DEBUG, "FSI - set_xstat_by_handle\n");
-
-	if (!p_handle || !p_buffxstat)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
 static fsal_status_t fsal_internal_testAccess_no_acl(const struct req_op_context *p_context,	/* IN */
@@ -546,65 +446,3 @@ static fsal_status_t fsal_internal_testAccess_no_acl(const struct req_op_context
 
 }
 
-/**
- *  fsal_error_is_info:
- *  Indicates if an FSAL error should be posted as an INFO level debug msg.
- *  \param status(input): The fsal status whom event is to be tested.
- *  \return - TRUE if the error event is to be posted.
- *          - FALSE if the error event is NOT to be posted.
- */
-bool_t fsal_error_is_info(fsal_status_t status)
-{
-	switch (status.major) {
-	case ERR_FSAL_PERM:
-	case ERR_FSAL_NOT_OPENED:
-	case ERR_FSAL_ACCESS:
-	case ERR_FSAL_FILE_OPEN:
-	case ERR_FSAL_DELAY:
-	case ERR_FSAL_NOTEMPTY:
-	case ERR_FSAL_DQUOT:
-	case ERR_FSAL_NOTDIR:
-	case ERR_FSAL_NOMEM:
-	case ERR_FSAL_FAULT:
-	case ERR_FSAL_EXIST:
-	case ERR_FSAL_XDEV:
-	case ERR_FSAL_ISDIR:
-	case ERR_FSAL_INVAL:
-	case ERR_FSAL_FBIG:
-	case ERR_FSAL_NOSPC:
-	case ERR_FSAL_MLINK:
-	case ERR_FSAL_NAMETOOLONG:
-	case ERR_FSAL_STALE:
-	case ERR_FSAL_NOTSUPP:
-	case ERR_FSAL_OVERFLOW:
-	case ERR_FSAL_DEADLOCK:
-	case ERR_FSAL_INTERRUPT:
-	case ERR_FSAL_SERVERFAULT:
-		return TRUE;
-
-	default:
-		return FALSE;
-	}
-}
-
-/**
- *  fsal_error_is_event:
- *  Indicates if an FSAL error should be posted as an event
- *  \param status(input): The fsal status whom event is to be tested.
- *  \return - TRUE if the error event is to be posted.
- *          - FALSE if the error event is NOT to be posted.
- *            
- */
-bool_t fsal_error_is_event(fsal_status_t status)
-{
-
-	switch (status.major) {
-
-	case ERR_FSAL_IO:
-	case ERR_FSAL_STALE:
-		return TRUE;
-
-	default:
-		return FALSE;
-	}
-}

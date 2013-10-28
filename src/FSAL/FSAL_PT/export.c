@@ -414,11 +414,6 @@ static void pt_verifier(struct gsh_buffdesc *verf_desc)
 	memcpy(verf_desc->addr, &PT_write_verifier, verf_desc->len);
 }
 
-void set_pt_verifier(verifier4 * verifier)
-{
-	memcpy(&PT_write_verifier, verifier, sizeof(verifier4));
-}
-
 /* pt_export_ops_init
  * overwrite vector entries with the methods that we support
  */

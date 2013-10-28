@@ -31,16 +31,6 @@ void *g_ccl_lib_handle;
 struct file_handles_struct_t *g_fsal_fsi_handles;
 
 // ----------------------------------------------------------------------------
-int handle_index_is_valid(int handle_index)
-{
-	if (handle_index < 0)
-		return 0;
-	if (handle_index >= (FSI_CCL_MAX_STREAMS + FSI_CIFS_RESERVED_STREAMS))
-		return 0;
-	return 1;
-}
-
-// ----------------------------------------------------------------------------
 static void ptfsal_create_key()
 {
 	if (pthread_key_create(&ptfsal_thread_key, NULL) < 0) {
@@ -379,28 +369,6 @@ int fsi_update_cache_name(char *oldname, char *newname)
 	return 0;
 }
 
-void fsi_remove_cache_by_handle(char *handle)
-{
-	int index;
-	pthread_rwlock_wrlock(&g_fsi_cache_handle_rw_lock);
-	for (index = 0; index < FSI_MAX_HANDLE_CACHE_ENTRY; index++) {
-
-		if (memcmp
-		    (handle, &g_fsi_name_handle_cache.m_entry[index].m_handle,
-		     FSI_CCL_PERSISTENT_HANDLE_N_BYTES) == 0) {
-			FSI_TRACE(FSI_DEBUG,
-				  "Handle will be removed from cache:")
-			    ptfsal_print_handle(handle);
-			/* Mark the both handle and name to 0 */
-			memset(g_fsi_name_handle_cache.m_entry[index].m_handle,
-			       0, FSI_CCL_PERSISTENT_HANDLE_N_BYTES);
-			g_fsi_name_handle_cache.m_entry[index].m_name[0] = '\0';
-			break;
-		}
-	}
-	pthread_rwlock_unlock(&g_fsi_cache_handle_rw_lock);
-}
-
 void fsi_remove_cache_by_fullpath(char *path)
 {
 	int index;
@@ -700,25 +668,6 @@ int ptfsal_readdir(const struct req_op_context *p_context,
 	return readdir_rc;
 }
 
-// -----------------------------------------------------------------------------
-int ptfsal_closedir(const struct req_op_context *p_context,
-		    struct fsal_export *export, fsal_dir_t * dir_desc)
-{
-	int dir_hnd_index;
-	ccl_context_t ccl_context;
-	ptfsal_dir_t *ptfsal_dir_descriptor = (ptfsal_dir_t *) dir_desc;
-
-	ptfsal_set_fsi_handle_data(export, p_context, &ccl_context);
-
-	dir_hnd_index = ptfsal_dir_descriptor->fd;
-
-	struct fsi_struct_dir_t *dirp = (struct fsi_struct_dir_t *)
-	    &g_fsi_dir_handles_fsal->m_dir_handle[dir_hnd_index].
-	    m_fsi_struct_dir;
-
-	return CCL_CLOSEDIR(&ccl_context, dirp);
-}
-
 int ptfsal_closedir_fd(const struct req_op_context *p_context,
 		       struct fsal_export *export, int fd)
 {
@@ -958,31 +907,6 @@ int ptfsal_open(struct pt_fsal_obj_handle *p_parent_directory_handle,
 	return handleOpened;
 }
 
-// -----------------------------------------------------------------------------
-int ptfsal_close_mount_root(fsal_export_context_t * p_export_context)
-{
-	ccl_context_t ccl_context;
-	ptfsal_export_context_t *fsi_export_context = p_export_context;
-
-	ccl_context.export_id = fsi_export_context->pt_export_id;
-	ccl_context.uid = 0;
-	ccl_context.gid = 0;
-
-	// Change to NFS_CLOSE only if it is NFS_OPEN. The calling function will ignore
-	// other nfs state.
-	int state_rc =
-	    CCL_SAFE_UPDATE_HANDLE_NFS_STATE(fsi_export_context->mount_root_fd,
-					     NFS_CLOSE,
-					     NFS_OPEN);
-	if (state_rc) {
-		FSI_TRACE(FSI_WARNING,
-			  "Unexpected state, not updating nfs state");
-	}
-
-	return 0;
-}
-
-// -----------------------------------------------------------------------------
 int ptfsal_ftruncate(const struct req_op_context *p_context,
 		     struct fsal_export *export, int handle_index,
 		     uint64_t offset)
@@ -1284,47 +1208,6 @@ uint64_t ptfsal_write(struct pt_fsal_obj_handle * p_file_descriptor,
 
 	return total_written;
 }
-
-// -----------------------------------------------------------------------------
-int ptfsal_dynamic_fsinfo(struct pt_fsal_obj_handle *p_filehandle,
-			  const struct req_op_context *p_context,
-			  fsal_dynamicfsinfo_t * p_dynamicinfo)
-{
-	int rc;
-	char fsi_name[PATH_MAX];
-
-	ccl_context_t ccl_context;
-	struct CCLClientOpDynamicFsInfoRspMsg fs_info;
-
-	rc = ptfsal_handle_to_name(p_filehandle->handle, p_context,
-				   p_filehandle->obj_handle.export, fsi_name);
-	if (rc) {
-		return rc;
-	}
-
-	FSI_TRACE(FSI_DEBUG, "Name = %s", fsi_name);
-
-	ptfsal_set_fsi_handle_data(p_filehandle->obj_handle.export, p_context,
-				   &ccl_context);
-	rc = CCL_DYNAMIC_FSINFO(&ccl_context, fsi_name, &fs_info);
-	if (rc) {
-		return rc;
-	}
-
-	p_dynamicinfo->total_bytes = fs_info.totalBytes;
-	p_dynamicinfo->free_bytes = fs_info.freeBytes;
-	p_dynamicinfo->avail_bytes = fs_info.availableBytes;
-
-	p_dynamicinfo->total_files = fs_info.totalFiles;
-	p_dynamicinfo->free_files = fs_info.freeFiles;
-	p_dynamicinfo->avail_files = fs_info.availableFiles;
-
-	p_dynamicinfo->time_delta.tv_sec = fs_info.time.tv_sec;
-	p_dynamicinfo->time_delta.tv_nsec = fs_info.time.tv_nsec;
-
-	return 0;
-}
-
 // -----------------------------------------------------------------------------
 int ptfsal_readlink(ptfsal_handle_t * p_linkhandle, struct fsal_export *export,
 		    const struct req_op_context *p_context, char *p_buf)
@@ -1350,35 +1233,6 @@ int ptfsal_readlink(ptfsal_handle_t * p_linkhandle, struct fsal_export *export,
 	}
 
 	rc = CCL_READLINK(&ccl_context, fsi_name, p_buf);
-	return rc;
-}
-
-// -----------------------------------------------------------------------------
-int ptfsal_symlink(struct pt_fsal_obj_handle *p_parent_directory_handle,
-		   const char *p_linkname, const char *p_linkcontent,
-		   const struct req_op_context *p_context, mode_t accessmode,
-		   ptfsal_handle_t * p_link_handle)
-{
-	int rc;
-
-	ccl_context_t ccl_context;
-	char pt_path[PATH_MAX];
-
-	ptfsal_set_fsi_handle_data(p_parent_directory_handle->obj_handle.export,
-				   p_context, &ccl_context);
-
-	rc = CCL_SYMLINK(&ccl_context, p_linkname, p_linkcontent);
-	if (rc) {
-		return rc;
-	}
-
-	memset(pt_path, 0, PATH_MAX);
-	memcpy(pt_path, p_linkname, PATH_MAX);
-
-	rc = ptfsal_name_to_handle(p_context,
-				   p_parent_directory_handle->obj_handle.export,
-				   pt_path, p_link_handle);
-
 	return rc;
 }
 

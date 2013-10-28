@@ -35,10 +35,6 @@
 #include "pt_methods.h"
 #include "pt_ganesha.h"
 
-extern fsal_status_t ptfsal_xstat_2_fsal_attributes(ptfsal_xstat_t *
-						    p_buffxstat, struct attrlist
-						    *p_fsalattr_out);
-
 /**
  * PTFSAL_getattrs:
  * Get attributes for the object specified by its filehandle.
