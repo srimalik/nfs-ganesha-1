@@ -102,6 +102,7 @@ void init_new_deleg_state(state_data_t *deleg_state, state_t *open_state,
 	deleg_state->deleg.sd_open_state = open_state;
 	deleg_state->deleg.sd_type = sd_type;
 	deleg_state->deleg.grant_time = time(NULL);
+	deleg_state->deleg.attrs_modified = FALSE;
 
 	clfile_entry->clientid = client;
 	clfile_entry->last_delegation = 0;

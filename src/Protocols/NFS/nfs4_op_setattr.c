@@ -148,7 +148,8 @@ int nfs4_op_setattr(struct nfs_argop4 *op, compound_data_t *data,
 				break;
 
 			case STATE_TYPE_DELEG:
-				state_open = NULL;
+				state_open =
+				    state_found->state_data.deleg.sd_open_state;
 				break;
 
 			default:

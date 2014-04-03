@@ -37,6 +37,8 @@
 #include "nfs_proto_tools.h"
 #include "idmapper.h"
 #include "export_mgr.h"
+#include "nfs_rpc_callback.h"
+#include "sal_functions.h"
 
 /* Define mapping of NFS4 who name and type. */
 static struct {
@@ -3088,6 +3090,239 @@ static cache_inode_status_t Fattr_filler(void *opaque,
 
 	return CACHE_INODE_SUCCESS;
 }
+/**
+ * @brief Get cahnge and size attributes from the client.
+ *
+ * @param[in] found_entry Lock entry covering the delegation
+ * @param[in] entry       File on which the delegation is held
+ *
+ * @return NFS4_OK or  errors.
+ *
+ */
+static nfsstat4 cb_getattr(state_lock_entry_t *found_entry,
+			   cache_entry_t *entry,
+			   fattr4 *obj_attributes,
+			   nfs_fh4 *objFH,
+			   compound_data_t *data)
+{
+	char *maxfh;
+	int32_t code = 0;
+	rpc_call_channel_t *chan;
+	rpc_call_t *call;
+	nfs_client_id_t *clid = NULL;
+	nfs_cb_argop4 argop[1];
+
+	maxfh = gsh_malloc(NFS4_FHSIZE);
+	if (maxfh == NULL) {
+		LogDebug(COMPONENT_NFS_CB, "not enough memory, failed.");
+		return  NFS4ERR_RESOURCE;
+	}
+
+	code = nfs_client_id_get_confirmed(found_entry->sle_owner->so_owner.
+					   so_nfs4_owner.so_clientid, &clid);
+	if (code != CLIENT_ID_SUCCESS) {
+		LogCrit(COMPONENT_NFS_CB, "No clid record  code %d", code);
+		gsh_free(maxfh);
+		return NFS4ERR_INVAL;
+	}
+	/* Attempt a callback only if channel state is UP */
+	pthread_mutex_lock(&clid->cid_mutex);
+	if (clid->cb_chan_down == TRUE) {
+		pthread_mutex_unlock(&clid->cid_mutex);
+		LogCrit(COMPONENT_NFS_CB,
+			"Call back channel down, not issuing CB_GETATTR");
+		gsh_free(maxfh);
+		return NFS4ERR_CB_PATH_DOWN;
+	}
+	pthread_mutex_unlock(&clid->cid_mutex);
+	chan = nfs_rpc_get_chan(clid, NFS_RPC_FLAG_NONE);
+	if (!chan) {
+		LogCrit(COMPONENT_NFS_CB, "nfs_rpc_get_chan failed");
+		/* TODO SRI: move this to nfs_rpc_get_chan ? */
+		pthread_mutex_lock(&clid->cid_mutex);
+		clid->cb_chan_down = TRUE;
+		pthread_mutex_unlock(&clid->cid_mutex);
+		gsh_free(maxfh);
+		return NFS4ERR_CB_PATH_DOWN;
+	}
+	if (!chan->clnt) {
+		LogCrit(COMPONENT_NFS_CB, "nfs_rpc_get_chan failed (no clnt)");
+		pthread_mutex_lock(&clid->cid_mutex);
+		clid->cb_chan_down = TRUE;
+		pthread_mutex_unlock(&clid->cid_mutex);
+		gsh_free(maxfh);
+		return NFS4ERR_CB_PATH_DOWN;
+	}
+
+	call = alloc_rpc_call();
+	call->chan = chan;
+
+	/* setup a compound */
+	cb_compound_init_v4(&call->cbt, 6, 0,
+			    clid->cid_cb.v40.cb_callback_ident, "cb_getattr",
+			    11);
+
+	memset(argop, 0, sizeof(nfs_cb_argop4));
+	argop->argop = NFS4_OP_CB_GETATTR;
+
+	/* Convert it to a file handle */
+	argop->nfs_cb_argop4_u.opcbgetattr.fh.nfs_fh4_len = 0;
+	argop->nfs_cb_argop4_u.opcbgetattr.fh.nfs_fh4_val = maxfh;
+
+	/* Building a new fh */
+	if (!nfs4_FSALToFhandle
+	    (&argop->nfs_cb_argop4_u.opcbrecall.fh, 
+		entry->obj_handle,
+		data->req_ctx->export)) {
+		gsh_free(call);
+		gsh_free(maxfh);
+		return NFS4ERR_INVAL;
+	}
+
+	memset(&argop->nfs_cb_argop4_u.opcbgetattr.attr_request, 0,
+		sizeof(bitmap4));
+	set_attribute_in_bitmap(&argop->
+				nfs_cb_argop4_u.opcbgetattr.attr_request,
+				FATTR4_CHANGE);
+	set_attribute_in_bitmap(&argop->
+				nfs_cb_argop4_u.opcbgetattr.attr_request,
+				FATTR4_SIZE);
+
+	/* add ops, till finished (dont exceed count) */
+	cb_compound_add_op(&call->cbt, argop);
+	/* TODO SRI: check if the callback is for same client RACE2*/
+	code = nfs_rpc_submit_call(call, NULL, NFS_RPC_CALL_INLINE);
+	if (call->stat != RPC_SUCCESS) {
+		pthread_mutex_lock(&clid->cid_mutex);
+		clid->cb_chan_down = TRUE;
+		pthread_mutex_unlock(&clid->cid_mutex);
+		/*TODO SRI: update counters */
+	}
+	else {
+		switch(call->cbt.v_u.v4.res.status) {
+		case NFS4_OK:
+			/*copy the attributes  from response */
+			break;
+		case NFS4ERR_BADHANDLE:
+			LogEvent(COMPONENT_NFS_CB,
+			 "Shoud not reach here, recall race should be handled");
+			/* TODO SRI: retry? */
+			break;
+		default:
+			LogEvent(COMPONENT_NFS_CB,
+				"CB_GETATTR failed with %d",
+				call->cbt.v_u.v4.res.status);
+		}
+	}
+	return(NFS4_OK);
+}
+/**
+ * @brief Update attributes in cache for delegated files
+ *
+ * If a file is write delegated to the client then fetch those from the
+ * client using CB_GETATTR.
+ *
+ * @param[in] chache entry
+ *
+ * @return NFS4_OK or errors.
+ *
+ */
+static nfsstat4 update_deleg_attributes(cache_entry_t *entry,
+						    compound_data_t *data,
+						    nfs_fh4 *objFH)
+{
+	struct glist_head *glist,*glist_n;
+	state_lock_entry_t *found_entry = NULL;
+	fattr4 obj_attributes;
+	struct attrlist sattr;
+	nfsstat4 status = NFS4_OK;
+	cache_inode_status_t cache_status = CACHE_INODE_SUCCESS;
+
+	if (entry->type != REGULAR_FILE)
+		return NFS4_OK;
+
+	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
+	glist_for_each_safe(glist, glist_n, &entry->object.file.deleg_list) {
+		found_entry = glist_entry(glist, state_lock_entry_t, sle_list);
+		
+		if (found_entry->sle_type != LEASE_LOCK)
+			continue;
+
+		if (found_entry != NULL &&
+		    found_entry->sle_state != NULL &&
+		    found_entry->sle_state->state_data.deleg.sd_type ==
+							OPEN_DELEGATE_WRITE) {
+			LogDebug(COMPONENT_NFS_V4, "found_entry %p",
+				 found_entry);
+			lock_entry_inc_ref(found_entry);
+			break;
+		}
+		else
+			found_entry = NULL;
+	}
+	PTHREAD_RWLOCK_unlock(&entry->state_lock);
+	/*TODO SRI: incr ref on found entry. */
+	if(!found_entry) { /* TODO SRI: print FH */
+		LogDebug(COMPONENT_NFS_V4,
+			"No write delegation for this entry");
+		return(NFS4_OK);
+	}
+	if(!found_entry->sle_state->state_data.deleg.attrs_modified) {
+		if((status = cb_getattr(found_entry, entry,
+					&obj_attributes,
+					objFH, data)) != NFS4_OK) {
+			LogCrit(COMPONENT_NFS_CB,
+					"Failed to get attributes from client");
+			lock_entry_dec_ref(found_entry);
+			return(status);
+		}
+		else {
+			status = nfs4_Fattr_To_FSAL_attr(&sattr,
+							 &obj_attributes,
+							 data);
+			if((entry->obj_handle->attributes.mask &
+			   (ATTR_CHANGE | ATTR_SIZE)) !=
+			   (ATTR_CHANGE | ATTR_SIZE)) {
+				LogDebug(COMPONENT_NFS_V4,
+				  "change or size missing in CB_GETATTR reply");
+				lock_entry_dec_ref(found_entry);
+				return NFS4ERR_INVAL;         /* need both */
+			}
+			if(entry->obj_handle->attributes.change !=
+								sattr.change) {
+				found_entry->
+				sle_state->
+				state_data.deleg.attrs_modified = TRUE;
+			}
+			/* else {
+			* attributes are not changed at client
+ 		 	* }
+ 		 	* */
+		}
+	}
+	if(found_entry->sle_state->state_data.deleg.attrs_modified) {
+		/*update times on disk */
+		sattr.mask |= (ATTR_CTIME | ATTR_MTIME);
+		clock_gettime(CLOCK_REALTIME, &sattr.ctime);
+		memcpy(&sattr.mtime, &sattr.ctime, sizeof(sattr.ctime));
+		cache_status = cache_inode_setattr(entry,
+				    &sattr,
+				    TRUE,
+				    data->req_ctx);
+		if (cache_status != CACHE_INODE_SUCCESS) {
+			lock_entry_dec_ref(found_entry);
+                	return cache_status;
+        	}
+		/* update change and size in the cache */
+		PTHREAD_RWLOCK_wrlock(&entry->attr_lock);
+		entry->obj_handle->attributes.change++;  
+		/* TODO SRI: shall we use a separate var to store this? */
+		entry->obj_handle->attributes.filesize = sattr.filesize;  
+		PTHREAD_RWLOCK_unlock(&entry->attr_lock);
+	}
+	lock_entry_dec_ref(found_entry);
+	return(NFS4_OK);
+}
 
 /**
  * @brief Fill NFSv4 Fattr from cache entry
@@ -3142,6 +3377,10 @@ nfsstat4 cache_entry_To_Fattr(cache_entry_t *entry, fattr4 *Fattr,
 		LogDebug(COMPONENT_NFS_V4_ACL,
 			 "No permission check for ACL for entry %p", entry);
 	}
+
+	/* Update attributes if the file is delegated
+ 	 * Ignore error and return whatever we have in cache */ 
+	update_deleg_attributes(entry, data, objFH);
 
 	return
 	    nfs4_Errno(cache_inode_getattr

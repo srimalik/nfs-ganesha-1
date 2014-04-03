@@ -301,6 +301,7 @@ typedef struct state_deleg__ {
 	struct glist_head sd_deleg_list; /*  */
 	time_t grant_time;               /* time of successful delegation */
 	struct clientfile_deleg_heuristics clfile_stats;  /* client specific */
+	bool_t attrs_modified;
 } state_deleg_t;
 
 /**
