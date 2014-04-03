@@ -947,9 +947,10 @@ static void get_delegation(compound_data_t *data, struct nfs_argop4 *op,
 			open_write_delegation4 *writeres =
 				&resok->delegation.open_delegation4_u.write;
 			writeres->space_limit.limitby = NFS_LIMIT_SIZE;
-			writeres->space_limit.nfs_space_limit4_u.filesize =
-				100000;
 			writeres->stateid = saved_data->deleg.sd_stateid;
+			writeres->space_limit.nfs_space_limit4_u.filesize =
+						DELEG_SPACE_LIMIT_FILESZ;
+			writeres->stateid = deleg_data.deleg.sd_stateid;
 			writeres->recall = FALSE;
 			get_deleg_perm(data->current_entry,
 				       &writeres->permissions, deleg_type);

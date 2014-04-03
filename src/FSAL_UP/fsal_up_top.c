@@ -1057,7 +1057,169 @@ state_status_t notify_device(notify_deviceid_type4 notify_type,
 }
 
 /**
- * @brief Handle the reply to a DELEGRECALL
+ * @brief Check if the delegation needs to be revoked.
+ *
+ * @param[in] found_entry SLE entry for the delegaion
+ *
+ * @return TRUE, if the delegation need to be revoked.
+ * @return FALSE, if the delegation should not be revoked.
+ */
+
+bool eval_revoke(state_lock_entry_t *found_entry)
+{
+	bool rc = FALSE;
+	/* TODO SRI: this needs changes to use more data to decide */
+	/* Always return false for now */
+#ifdef ENABLEDEADCODE
+	struct clientfile_deleg_heuristics *clfl_stats;
+	struct client_deleg_heuristics *cl_stats;
+	time_t curr_time;
+	struct nfs_client_id_t *clientid;
+	time_t last_recall_success;
+	uint32_t lease_lifetime = nfs_param.nfsv4_param.lease_lifetime;
+
+	if (found_entry->sle_type != LEASE_LOCK) {
+		LogDebug(COMPONENT_NFS_V4,
+			"State does not represent a delegation");
+		return FALSE;
+	}
+
+	open_delegation_type4 sd_type =
+			found_entry->sle_state->state_data.deleg.sd_type;
+	if (sd_type != OPEN_DELEGATE_READ && sd_type != OPEN_DELEGATE_WRITE) {
+		LogDebug(COMPONENT_NFS_V4,
+			"State does not represent a READ or WRITE delegation");
+		return FALSE;
+	}
+
+	/* Return true always. */
+	LogEvent(COMPONENT_NFS_V4, "Revoking delegation");
+	return TRUE;
+
+
+	clfl_stats = &found_entry->sle_state->state_data.deleg.clfile_stats;
+	cl_stats = &clfl_stats->clientid->deleg_heuristics;
+
+	curr_time = time(NULL);
+	last_recall_success = clfl_stats->last_recall_success;
+
+	if ((curr_time - last_recall_success) > (2 * lease_lifetime)) {
+		/* Check if the path is down */
+		clientid = clfl_stats->clientid;
+		if (p_cargs->clid->cb_chan_down = TRUE) {
+			rc = TRUE;
+			LogDebug(COMPONENT_NFS_V4, "Callback path down for "
+				"more than 2 lease periods, will be revoked");
+		}
+	}
+
+#endif
+	return rc;
+}
+
+/**
+ * @brief Handle NFS4ERR_BADHANDLE response
+ *
+ * @param[in] call  The RPC call being completed
+ * @param[in] clfl_stats  client-file deleg heuristics
+ * @param[in] cl_stats client deleg heuristics
+ * @param[in] p_cargs deleg recall context
+ *
+ */
+
+
+static bool handle_badhandle_response(rpc_call_t *call,
+			     struct clientfile_deleg_heuristics *clfl_stats,
+			     struct client_deleg_heuristics *cl_stats,
+			     struct delegrecall_completion_ags *p_cargs)
+{
+	int32_t code = 0;
+	bool needs_revoke = TRUE;
+	int32_t recall_retry_delay =
+			nfs_param.nfsv4_param.deleg_recall_retry_delay;
+	int32_t recall_race_retry_count =
+			nfs_param.nfsv4_param.deleg_recall_race_retry_count;
+
+	while (recall_race_retry_count--) {
+
+		atomic_inc_uint32_t(&clfl_stats->num_recall_races);
+
+		sleep(recall_retry_delay);
+		/* reuse the same call */
+		call->states = NFS_CB_CALL_NONE;
+		call->call_hook = NULL;
+
+		code = nfs_rpc_submit_call(call, p_cargs, NFS_RPC_CALL_INLINE);
+		atomic_inc_uint32_t(&clfl_stats->num_recalls);
+		atomic_inc_uint32_t(&cl_stats->tot_recalls);
+
+		if (call->stat != RPC_SUCCESS) {
+			LogEvent(COMPONENT_NFS_CB, "Callback channel down");
+			pthread_mutex_lock(&p_cargs->clid->cid_mutex);
+			p_cargs->clid->cb_chan_down = TRUE;
+			pthread_mutex_unlock(&p_cargs->clid->cid_mutex);
+			atomic_inc_uint32_t(&clfl_stats->num_recall_timeouts);
+			needs_revoke = TRUE;
+			break;	/* do not retry if the channel is down */
+		} else {
+			if (call->cbt.v_u.v4.res.status == NFS4_OK) {
+				clfl_stats->last_recall_success = time(NULL);
+				needs_revoke = FALSE;
+				break;
+			} else if (call->cbt.v_u.v4.res.status ==
+							NFS4ERR_BADHANDLE) {
+				continue;
+			} else {
+				atomic_inc_uint32_t(&clfl_stats->
+							num_recall_aborts);
+				needs_revoke = TRUE;
+				break;
+			}
+		}
+	}
+	return needs_revoke;
+}
+
+
+/**
+ * @brief Handle recall response
+ *
+ * @param[in] call  The RPC call being completed
+ * @param[in] clfl_stats  client-file deleg heuristics
+ * @param[in] cl_stats client deleg heuristics
+ * @param[in] p_cargs deleg recall context
+ *
+ */
+
+static bool handle_recall_response(rpc_call_t *call,
+			     struct clientfile_deleg_heuristics *clfl_stats,
+			     struct client_deleg_heuristics *cl_stats,
+			     struct delegrecall_completion_ags *p_cargs)
+{
+	bool needs_revoke = FALSE;
+
+	switch (call->cbt.v_u.v4.res.status) {
+	case NFS4_OK:
+		LogDebug(COMPONENT_NFS_CB,
+		"Delegation successfully recalled");
+		clfl_stats->last_recall_success =
+					time(NULL);
+		break;
+	case NFS4ERR_BADHANDLE:
+		needs_revoke = handle_badhandle_response(call,
+					clfl_stats, cl_stats, p_cargs);
+		break;
+	default:
+		/* some other NFS error,
+		* consider the recall failed */
+		atomic_inc_uint32_t(&clfl_stats->num_recall_aborts);
+		needs_revoke = TRUE;
+		break;
+	} 
+	return needs_revoke;
+}
+/**
+ * @brief Handle the reply to a CB_RECALL
  *
  * @param[in] call  The RPC call being completed
  * @param[in] hook  The hook itself
@@ -1072,33 +1234,72 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 					   uint32_t flags)
 {
 	char *fh;
-	nfs_client_id_t *clid;
+	bool needs_revoke = FALSE;
+	state_status_t rc = STATE_SUCCESS;
+	struct delegrecall_completion_ags *p_cargs =
+				(struct delegrecall_completion_ags *) arg;
+	struct clientfile_deleg_heuristics *clfl_stats = NULL;
+	struct client_deleg_heuristics *cl_stats = NULL;
+	state_lock_entry_t *found_entry = p_cargs->sle_entry;
 
 	LogDebug(COMPONENT_NFS_CB, "%p %s", call,
 		 (hook ==
 		  RPC_CALL_ABORT) ? "RPC_CALL_ABORT" : "RPC_CALL_COMPLETE");
-	clid = (nfs_client_id_t *)arg;
+
+	if (!found_entry) {
+		LogEvent(COMPONENT_NFS_CB,
+		"No state lock entry for the recalled delegation");
+		fh = call->cbt.v_u.v4.args.argarray.argarray_val->
+		    nfs_cb_argop4_u.opcbrecall.fh.nfs_fh4_val;
+		goto out_free;
+	}
+
+	LogDebug(COMPONENT_NFS_CB, "found_entry %p",
+				 found_entry);
+	clfl_stats = &found_entry->sle_state->state_data.deleg.clfile_stats;
+	cl_stats = &clfl_stats->clientid->deleg_heuristics;
 	switch (hook) {
 	case RPC_CALL_COMPLETE:
 		/* potentially, do something more interesting here */
 		LogDebug(COMPONENT_NFS_CB, "call result: %d", call->stat);
 		fh = call->cbt.v_u.v4.args.argarray.argarray_val->
-		    nfs_cb_argop4_u.opcbrecall.fh.nfs_fh4_val;
-		/* Mark the channel down if the rpc call failed
-		* TODO: what to do about server issues which made the RPC call fail ? */
+				nfs_cb_argop4_u.opcbrecall.fh.nfs_fh4_val;
 		if (call->stat != RPC_SUCCESS) {
-			pthread_mutex_lock(&clid->cid_mutex);
-			clid->cb_chan_down = TRUE;
-			pthread_mutex_unlock(&clid->cid_mutex);
-		}
-		gsh_free(fh);
-		cb_compound_free(&call->cbt);
+			LogEvent(COMPONENT_NFS_CB, "Callback channel down");
+			pthread_mutex_lock(&p_cargs->clid->cid_mutex);
+			p_cargs->clid->cb_chan_down = TRUE;
+			pthread_mutex_unlock(&p_cargs->clid->cid_mutex);
+			atomic_inc_uint32_t(&clfl_stats->num_recall_timeouts);
+			needs_revoke = TRUE;
+		} else
+			needs_revoke = handle_recall_response(call, clfl_stats,
+					       cl_stats, p_cargs);
 		break;
 	default:
 		LogDebug(COMPONENT_NFS_CB, "%p unknown hook %d", call, hook);
+		/* Mark the recall as failed */
+		atomic_inc_uint32_t(&clfl_stats->num_recall_aborts);
+		needs_revoke = TRUE;
 		break;
 	}
-	return 0;
+	if (needs_revoke) {
+		LogCrit(COMPONENT_NFS_V4, 
+			"Delegation could not be recalled, revoking");
+		if (eval_revoke(found_entry)) {
+			rc = deleg_revoke(found_entry, FALSE);
+			atomic_inc_uint32_t(&clfl_stats->num_revokes);
+			atomic_inc_uint32_t(&cl_stats->num_revokes);
+			if (rc != STATE_SUCCESS)
+				LogCrit(COMPONENT_NFS_V4, 
+					"Delegation could not be revoked");
+		}
+	}
+out_free:
+	gsh_free(fh);
+	gsh_free(p_cargs);
+	cb_compound_free(&call->cbt);
+	lock_entry_dec_ref(found_entry);
+	return 0; /*Always return zero, the delegation is recalled or revoked */
 }
 
 /**
@@ -1122,6 +1323,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *found_entry,
 	exp = container_of(found_entry->sle_state->state_export,
 			   struct gsh_export,
 			   export);
+	struct delegrecall_completion_ags *p_cargs = NULL;
 
 	maxfh = gsh_malloc(NFS4_FHSIZE); /* free in cb_completion_func() */
 	if (maxfh == NULL) {
@@ -1143,7 +1345,8 @@ static uint32_t delegrecall_one(state_lock_entry_t *found_entry,
 	pthread_mutex_lock(&clid->cid_mutex);
 	if (clid->cb_chan_down == TRUE) {
 		pthread_mutex_unlock(&clid->cid_mutex);
-		LogCrit(COMPONENT_NFS_CB, "Call back channel down, not issuing a recall");
+		LogCrit(COMPONENT_NFS_CB, "Call back channel down, "
+						"not issuing a recall");
 		gsh_free(maxfh);
 		return NFS_CB_CALL_ABORTED;
 	}
@@ -1193,6 +1396,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *found_entry,
 				entry->obj_handle,
 				exp)) {
 		gsh_free(call);
+		gsh_free(maxfh);
 		return NFS_CB_CALL_ABORTED;
 	}
 
@@ -1203,9 +1407,15 @@ static uint32_t delegrecall_one(state_lock_entry_t *found_entry,
 	call->call_hook = delegrecall_completion_func;
 
 	/* call it (here, in current thread context)
-	 * nfs_rpc_submit_call() always returns zero. ignore it. */
-	nfs_rpc_submit_call(call, clid, NFS_RPC_FLAG_NONE);
+	* nfs_rpc_submit_call() always returns zero. ignore it. */
+	p_cargs = gsh_malloc(sizeof(struct delegrecall_completion_ags));
+	p_cargs->clid = clid;
+	p_cargs->entry = entry;
+	lock_entry_inc_ref(found_entry);
+	p_cargs->sle_entry = found_entry;
+	nfs_rpc_submit_call(call, p_cargs, NFS_RPC_CALL_NONE);
 	return call->states;
+
 };
 
 state_status_t delegrecall(cache_entry_t *entry, bool rwlocked)
@@ -1215,6 +1425,7 @@ state_status_t delegrecall(cache_entry_t *entry, bool rwlocked)
 	state_status_t rc = 0;
 	struct clientfile_deleg_heuristics *clfl_stats;
 	struct client_deleg_heuristics *cl_stats;
+	bool needs_revoke = FALSE;
 
 	LogDebug(COMPONENT_FSAL_UP,
 		 "FSAL_UP_DELEG: Invalidate cache found entry %p type %u",
@@ -1232,12 +1443,21 @@ state_status_t delegrecall(cache_entry_t *entry, bool rwlocked)
 
 		LogDebug(COMPONENT_NFS_CB, "found_entry %p", found_entry);
 
-		clfl_stats = &found_entry->sle_state->state_data.deleg.clfile_stats;
+		clfl_stats = &found_entry->
+				sle_state->state_data.deleg.clfile_stats;
 		cl_stats = &clfl_stats->clientid->deleg_heuristics;
-		clfl_stats->num_recalls++;
-		cl_stats->tot_recalls++;
+		atomic_inc_uint32_t(&clfl_stats->num_recalls);
+		atomic_inc_uint32_t(&cl_stats->tot_recalls);
 
+		/* Do not recall again if we have already done so.
+ 		* Check if we want to revoke. */
+		if (clfl_stats->last_recall_success) {
+			LogEvent(COMPONENT_NFS_CB, "A previous recall was"
+				" successful, not issuing a new recall");
+				/* TODO: Check for revoke */
+		}
 		switch (delegrecall_one(found_entry, entry)) {
+
 		case NFS_CB_CALL_FINISHED:
 			break;
 		case NFS_CB_CALL_NONE:
@@ -1248,19 +1468,40 @@ state_status_t delegrecall(cache_entry_t *entry, bool rwlocked)
 			break;
 		case NFS_CB_CALL_ABORTED:
 			LogCrit(COMPONENT_NFS_CB, "Failed to recall, aborted!");
-			clfl_stats->num_recall_aborts++;
-			cl_stats->failed_recalls++;
+			atomic_inc_uint32_t(&clfl_stats->num_recall_aborts);
+			atomic_inc_uint32_t(&cl_stats->failed_recalls);
+			needs_revoke = TRUE;
 			break;
 		case NFS_CB_CALL_TIMEDOUT: /* network or client trouble */
-			LogCrit(COMPONENT_NFS_CB, "Failed to recall due to "
-				"timeout!");
-			clfl_stats->num_recall_timeouts++;
-			cl_stats->failed_recalls++;
+			LogCrit(COMPONENT_NFS_CB,
+				"Failed to recall due to timeout!");
+			atomic_inc_uint32_t(&clfl_stats->num_recall_timeouts);
+			atomic_inc_uint32_t(&cl_stats->failed_recalls);
+			needs_revoke = TRUE;
 			break;
 		default:
 			LogCrit(COMPONENT_NFS_CB, "delegrecall_one() failed.");
+			needs_revoke = TRUE;
 			break;
 		}
+
+		if (needs_revoke) {
+			LogCrit(COMPONENT_NFS_V4, "Delegation could not be "
+				"recalled, revoking");
+			if (eval_revoke(found_entry)) {
+				rc = deleg_revoke(found_entry, TRUE);
+				atomic_inc_uint32_t(&clfl_stats->num_revokes);
+				atomic_inc_uint32_t(&cl_stats->num_revokes);
+				if (rc != STATE_SUCCESS)
+					LogCrit(COMPONENT_NFS_V4,
+					    "Delegation could not be revoked");
+			}
+			needs_revoke = FALSE;
+		}
+		/* break in case of write delegation, there will be only one */
+		if (found_entry->sle_state->state_data.deleg.sd_type ==
+							OPEN_DELEGATE_WRITE)
+			break;
 	}
 
 	if (!rwlocked)
