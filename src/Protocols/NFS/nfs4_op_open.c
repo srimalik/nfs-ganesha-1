@@ -1453,9 +1453,11 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 	}
 
 	/* Decide if we should delegate, then add it. */
-	if (data->current_entry->type != DIRECTORY
-	    && data->export->export_hdl->ops->fs_supports(data->export->export_hdl,
-							  fso_delegations)
+	if (nfs_param.nfsv4_param.allow_delegations &&
+	    data->current_entry->type != DIRECTORY
+	    && data->export->export_hdl->ops->fs_supports(
+						data->export->export_hdl,
+						fso_delegations)
 	    && (data->export_perms.options & EXPORT_OPTION_DELEGATIONS)
 	    && owner->so_owner.so_nfs4_owner.so_confirmed == TRUE
 	    && !get_cb_chan_down(clientid)

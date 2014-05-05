@@ -294,6 +294,8 @@ static struct config_item version4_params[] = {
 	CONF_ITEM_UI32("Deleg_Recall_Retries", 0, 10,
 			DELEG_RECALL_RETRY_COUNT_DEFAULT,
 			nfs_version4_parameter, deleg_recall_retry_count),
+	CONF_ITEM_BOOL("Delegations", false,
+		       nfs_version4_parameter, allow_delegations),
 	CONFIG_EOL
 };
 

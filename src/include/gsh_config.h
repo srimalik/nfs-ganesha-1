@@ -435,6 +435,9 @@ typedef struct nfs_version4_parameter {
 	uint32_t deleg_recall_retry_count;
 	/** Delay after which server will retry a recall in case of failures */
 	uint32_t deleg_recall_retry_delay;
+	/** Whether to allow delegations. Defaults to false and settable
+	    with Delegations */
+	bool allow_delegations;
 } nfs_version4_parameter_t;
 
 /** @} */
