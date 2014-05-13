@@ -349,6 +349,7 @@ state_status_t deleg_revoke(state_lock_entry_t *deleg_entry)
 	state_owner_t *clientowner = NULL;
 	fsal_lock_param_t lock_desc;
 	struct nfs_client_id_t *clid = NULL;
+	state_t *deleg_state = deleg_entry->sle_state;
 
 	uint32_t code =
 		nfs_client_id_get_confirmed(deleg_entry->sle_owner->so_owner.
@@ -386,8 +387,8 @@ state_status_t deleg_revoke(state_lock_entry_t *deleg_entry)
 		LogDebug(COMPONENT_NFS_V4_LOCK, "state unlock failed: %d",
 			 state_status);
 	}
-	pthread_mutex_lock(&deleg_entry->sle_mutex);
-	deleg_entry->sle_state->state_data.deleg.deleg_state = DELEG_REVOKED;
-	pthread_mutex_unlock(&deleg_entry->sle_mutex);
+
+	state_del(deleg_state, false);
+
 	return STATE_SUCCESS;
 }
