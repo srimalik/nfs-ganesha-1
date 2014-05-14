@@ -1318,7 +1318,8 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			atomic_inc_uint32_t(&clfl_stats->num_revokes);
 			atomic_inc_uint32_t(&cl_stats->num_revokes);
 			PTHREAD_RWLOCK_unlock(&entry->state_lock);
-			rc = deleg_revoke(deleg_entry);
+			rc = deleg_revoke(deleg_entry, entry,
+					  &deleg_ctx->sd_stateid);
 			if (rc != STATE_SUCCESS) {
 				LogCrit(COMPONENT_NFS_V4,
 					"Delegation could not be revoked(%p)",
@@ -1559,7 +1560,8 @@ static void delegrevoke_check(struct fridgethr_context *ctx)
 					"Revoking delegation(%p)", deleg_entry);
 				/* Need to release the lock for state_unlock */
 				PTHREAD_RWLOCK_unlock(&entry->state_lock);
-				rc = deleg_revoke(deleg_entry);
+				rc = deleg_revoke(deleg_entry, entry,
+						  &deleg_ctx->sd_stateid);
 				if (rc != STATE_SUCCESS) {
 					LogCrit(COMPONENT_NFS_V4,
 					  "Delegation could not be revoked(%p)",
