@@ -373,7 +373,7 @@ int nfs4_op_setclientid_confirm(struct nfs_argop4 *op, compound_data_t *data,
 				"setclid confirm: Callback channel is down");
 		} else {
 			conf->cb_chan_down = FALSE;
-			LogCrit(COMPONENT_CLIENTID,
+			LogDebug(COMPONENT_CLIENTID,
 				"setclid confirm: Callback channel is UP");
 		}
 
@@ -426,7 +426,7 @@ int nfs4_op_setclientid_confirm(struct nfs_argop4 *op, compound_data_t *data,
 				"setclid confirm: Callback channel is down");
 		} else {
 			unconf->cb_chan_down = FALSE;
-			LogCrit(COMPONENT_CLIENTID,
+			LogDebug(COMPONENT_CLIENTID,
 				"setclid confirm: Callback channel is UP");
 		}
 
