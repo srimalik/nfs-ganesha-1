@@ -1050,8 +1050,8 @@ static state_status_t subtract_deleg_from_list(cache_entry_t *entry,
 		if (found_entry->sle_type != LEASE_LOCK)
 			continue;
 
-		/* Tell GPFS delegation is returned then remove from list. */
 		glist_del(&found_entry->sle_list);
+		lock_entry_dec_ref(found_entry);
 		*removed = true;
 	}
 	if (!removed)
@@ -2789,6 +2789,7 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 		/* Insert entry into delegation list */
 		LogEntry("New delegation", found_entry);
 		update_delegation_stats(entry, state);
+		lock_entry_inc_ref(found_entry);
 		glist_add_tail(&entry->object.file.deleg_list,
 			       &found_entry->sle_list);
 	} else if (status == STATE_SUCCESS && sle_type == POSIX_LOCK) {
