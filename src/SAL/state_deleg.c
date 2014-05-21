@@ -340,8 +340,7 @@ void get_deleg_perm(cache_entry_t *entry, nfsace4 *permissions,
  *
  * @param[in] deleg state lock entry.
  */
-state_status_t deleg_revoke(struct state_lock_entry_t *deleg_ctx,
-			    cache_entry_t *entry, stateid4 *sd_stateid)
+state_status_t deleg_revoke(struct state_lock_entry_t *deleg_entry)
 {
 	state_status_t state_status;
 	cache_entry_t *pentry = NULL;
@@ -349,49 +348,37 @@ state_status_t deleg_revoke(struct state_lock_entry_t *deleg_ctx,
 	struct root_op_context root_op_context;
 	state_owner_t *clientowner = NULL;
 	fsal_lock_param_t lock_desc;
-	struct glist_head *glist, *glist_n;
-	state_lock_entry_t *deleg_entry = NULL;
 	state_t *deleg_state = NULL;
 
 	init_root_op_context(&root_op_context, NULL, NULL,
 			     0, 0, UNKNOWN_REQUEST);
 
-	/*TODO: use refcnt on state_lock_entry_t instead of locks */
-	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
-	glist_for_each_safe(glist, glist_n, &entry->object.file.deleg_list) {
-		deleg_entry = glist_entry(glist, state_lock_entry_t, sle_list);
-		if (deleg_ctx == deleg_entry &&
-		    deleg_entry->sle_type == LEASE_LOCK &&
-		    !memcmp(sd_stateid,
-			    &deleg_entry->
-					sle_state->state_data.deleg.sd_stateid,
-			    sizeof(stateid4))) {
-			deleg_state = deleg_entry->sle_state;
-			clientowner = deleg_entry->sle_owner;
-			pentry = deleg_entry->sle_entry;
-			pexport = deleg_entry->sle_export;
-			root_op_context.req_ctx.clientid =
-						&deleg_entry->sle_owner->
-						so_owner.so_nfs4_owner.
-						so_clientid;
-			root_op_context.req_ctx.export =
-				container_of(deleg_state->
-					     state_export,
-					     struct gsh_export,
-					     export);
-			root_op_context.req_ctx.fsal_export =
-					deleg_state->state_export->export_hdl;
-			break;
-		}
-	}
-	PTHREAD_RWLOCK_unlock(&entry->state_lock);
-
-	if (!deleg_state) {
+	pthread_mutex_lock(&deleg_entry->sle_mutex);
+	if (!deleg_entry->sle_state) {
+		pthread_mutex_unlock(&deleg_entry->sle_mutex);
 		LogDebug(COMPONENT_STATE,
-			 "No delegation state found matching %p, the delegation is returned",
-			 deleg_entry);
+			 "The delgation is returned, not revoking");
 		return STATE_SUCCESS;
 	}
+	deleg_entry->sle_state->state_data.deleg.deleg_state = DELEG_REVOKED;
+
+	pthread_mutex_unlock(&deleg_entry->sle_mutex);
+
+	deleg_state = deleg_entry->sle_state;
+	clientowner = deleg_entry->sle_owner;
+	pentry = deleg_entry->sle_entry;
+	pexport = deleg_entry->sle_export;
+	root_op_context.req_ctx.clientid =
+				&deleg_entry->sle_owner->
+				so_owner.so_nfs4_owner.
+				so_clientid;
+	root_op_context.req_ctx.export =
+		container_of(deleg_state->
+			     state_export,
+			     struct gsh_export,
+			     export);
+	root_op_context.req_ctx.fsal_export =
+			deleg_state->state_export->export_hdl;
 
 	lock_desc.lock_type = FSAL_LOCK_R;  /* doesn't matter for unlock */
 	lock_desc.lock_start = 0;

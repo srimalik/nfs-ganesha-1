@@ -135,8 +135,6 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 	PTHREAD_RWLOCK_wrlock(&pentry->state_lock);
 	glist_for_each_safe(glist, glistn, &pentry->object.file.deleg_list) {
 		found_entry = glist_entry(glist, state_lock_entry_t, sle_list);
-		if (found_entry == NULL)
-			continue;
 		LogDebug(COMPONENT_NFS_V4_LOCK, "found_entry %p", found_entry);
 		if (found_entry->sle_state->state_type != STATE_TYPE_DELEG) {
 			found_entry = NULL;
@@ -156,6 +154,27 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 			res_DELEGRETURN4->status = NFS4ERR_BAD_SEQID;
 			return res_DELEGRETURN4->status;
 		}
+
+		pthread_mutex_lock(&found_entry->sle_mutex);
+		if (!found_entry->sle_state) {
+			LogDebug(COMPONENT_NFS_V4,
+				 "state is not valid, duplication delegreturni(%p)?",
+				 found_entry);
+			res_DELEGRETURN4->status = NFS4ERR_BAD_STATEID;
+			return res_DELEGRETURN4->status;
+		}
+		if (pstate_found->state_data.deleg.deleg_state !=
+								DELEG_REVOKED) {
+			found_entry->sle_state = NULL;
+		} else {
+			pthread_mutex_unlock(&found_entry->sle_mutex);
+			res_DELEGRETURN4->status = NFS4ERR_REVOKED;
+			return res_DELEGRETURN4->status;
+		}
+		pthread_mutex_unlock(&found_entry->sle_mutex);
+
+		lock_entry_inc_ref(found_entry);
+
 		break;
 	}
 	PTHREAD_RWLOCK_unlock(&pentry->state_lock);
@@ -167,10 +186,6 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 		return res_DELEGRETURN4->status;
 	}
 
-	pthread_mutex_lock(&found_entry->sle_mutex);
-	found_entry->sle_state->state_data.deleg.deleg_state = DELEG_RETURNED;
-	pthread_mutex_unlock(&found_entry->sle_mutex);
-		
 	plock_owner = found_entry->sle_owner;
 
 	LogLock(COMPONENT_NFS_V4_LOCK, NIV_FULL_DEBUG, tag, data->current_entry,
@@ -198,6 +213,7 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 				    resp,
 				    tag);
 
+		lock_entry_dec_ref(found_entry);
 		return res_DELEGRETURN4->status;
 	}
 
@@ -219,6 +235,7 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 			    resp,
 			    tag);
 
+	lock_entry_dec_ref(found_entry);
 	return res_DELEGRETURN4->status;
 }				/* nfs4_op_delegreturn */
 
