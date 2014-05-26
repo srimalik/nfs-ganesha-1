@@ -1412,7 +1412,6 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 			    clid->cid_cb.v40.cb_callback_ident, "brrring!!!",
 			    10);
 
-	memset(argop, 0, sizeof(nfs_cb_argop4));
 	argop->argop = NFS4_OP_CB_RECALL;
 	argop->nfs_cb_argop4_u.opcbrecall.stateid.seqid =
 	    deleg_entry->sle_state->state_seqid;
@@ -1436,6 +1435,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 				entry->obj_handle,
 				exp)) {
 		code = NFS_CB_CALL_ABORTED;
+		LogCrit(COMPONENT_FSAL_UP, "nfs4_FSALToFhandle failed, can not process recall");
 		goto out;
 	}
 
