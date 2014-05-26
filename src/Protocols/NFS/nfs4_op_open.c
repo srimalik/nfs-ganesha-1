@@ -1450,7 +1450,6 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 		data->current_entry->object.file.fdeleg_stats.fds_num_opens++;
 	}
 
-	pthread_mutex_lock(&clientid->cid_mutex);
 	/* Decide if we should delegate, then add it. */
 	if (data->current_entry->type != DIRECTORY
 	    && data->export->export_hdl->ops->fs_supports(data->export->export_hdl,
@@ -1463,12 +1462,10 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 				     clientid,
 				     file_state)) {
 		LogDebug(COMPONENT_STATE, "Attempting to grant delegation");
-		pthread_mutex_unlock(&clientid->cid_mutex);
 		get_delegation(data, op, file_state, owner, clientid,
 			       &res_OPEN4->OPEN4res_u.resok4,
 			       &data->export_perms);
 	} else {
-		pthread_mutex_unlock(&clientid->cid_mutex);
 		res_OPEN4->OPEN4res_u.resok4.delegation.open_delegation4_u.
 			od_whynone.ond_why = WND4_NOT_WANTED;
 	}
