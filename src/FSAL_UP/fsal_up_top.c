@@ -1392,7 +1392,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	call->chan = chan;
 
 	/* setup a compound */
-	cb_compound_init_v4(&call->cbt, 6, 0,
+	cb_compound_init_v4(&call->cbt, 1, 0,
 			    clid->cid_cb.v40.cb_callback_ident, "brrring!!!",
 			    10);
 
@@ -1424,7 +1424,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 		goto out;
 	}
 
-	/* add ops, till finished (dont exceed count) */
+	/* add ops, till finished */
 	cb_compound_add_op(&call->cbt, argop);
 
 	/* set completion hook */
