@@ -1152,7 +1152,7 @@ static bool handle_badhandle_response(state_lock_entry_t *deleg_entry,
 
 		if (call->stat != RPC_SUCCESS) {
 			LogEvent(COMPONENT_NFS_CB, "Callback channel down");
-			p_cargs->clid->cb_chan_down = TRUE;
+			set_cb_chan_down(p_cargs->clid, true);
 			needs_revoke = TRUE;
 			break;	/* do not retry if the channel is down */
 		} else {
@@ -1281,7 +1281,7 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 				nfs_cb_argop4_u.opcbrecall.fh.nfs_fh4_val;
 		if (call->stat != RPC_SUCCESS) {
 			LogEvent(COMPONENT_NFS_CB, "Callback channel down");
-			deleg_ctx->clid->cb_chan_down = TRUE;
+			set_cb_chan_down(deleg_ctx->clid, true);
 			needs_revoke = TRUE;
 		} else
 			needs_revoke = handle_recall_response(deleg_entry,
@@ -1351,8 +1351,6 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	struct gsh_export *exp;
 	bool needs_revoke = FALSE;
 	struct delegrecall_context *p_cargs = NULL;
-	struct cf_deleg_stats *clfl_stats =
-		&deleg_entry->sle_state->state_data.deleg.sd_clfile_stats;
 	struct c_deleg_stats *cl_stats;
 	nfs_client_id_t *clientid;
 	clientid = deleg_entry->sle_owner->so_owner.so_nfs4_owner.so_clientrec;
@@ -1377,7 +1375,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	}
 
 	/* Attempt a recall only if channel state is UP */
-	if (clid->cb_chan_down == TRUE) {
+	if (get_cb_chan_down(clid)) {
 		LogCrit(COMPONENT_NFS_CB,
 			"Call back channel down, not issuing a recall");
 		code = NFS_CB_CALL_ABORTED;
@@ -1388,13 +1386,13 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	if (!chan) {
 		LogCrit(COMPONENT_NFS_CB, "nfs_rpc_get_chan failed");
 		/* TODO: move this to nfs_rpc_get_chan ? */
-		clid->cb_chan_down = TRUE;
+		set_cb_chan_down(clid, true);
 		code = NFS_CB_CALL_ABORTED;
 		goto out;
 	}
 	if (!chan->clnt) {
 		LogCrit(COMPONENT_NFS_CB, "nfs_rpc_get_chan failed (no clnt)");
-		clid->cb_chan_down = TRUE;
+		set_cb_chan_down(clid, true);
 		code = NFS_CB_CALL_ABORTED;
 		goto out;
 	}
@@ -1666,7 +1664,6 @@ state_status_t delegrecall_impl(cache_entry_t *entry)
 		rc = delegrecall_one(deleg_entry);
 
 	}
-out:
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 	return rc;
 }
