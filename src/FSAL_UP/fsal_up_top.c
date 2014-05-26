@@ -1669,7 +1669,7 @@ state_status_t delegrecall_impl(cache_entry_t *entry)
 		if (*deleg_state != DELEG_GRANTED) {
 			LogDebug(COMPONENT_FSAL_UP,
 				 "Delegation already being recalled, NOOP");
-			goto out;
+			continue;
 		}
 		*deleg_state = DELEG_RECALL_WIP;
 		clfl_stats->cfd_r_time = time(NULL);
