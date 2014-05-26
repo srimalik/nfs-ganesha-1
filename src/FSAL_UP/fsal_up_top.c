@@ -1335,7 +1335,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	nfs_client_id_t *clid = NULL;
 	nfs_cb_argop4 argop[1];
 	struct gsh_export *exp;
-	bool needs_revoke = FALSE;
+	bool needs_revoke = false;
 	struct delegrecall_context *p_cargs = NULL;
 	struct c_deleg_stats *cl_stats;
 	nfs_client_id_t *clientid;
@@ -1354,7 +1354,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 					so_nfs4_owner.so_clientid, &clid);
 	if (code != CLIENT_ID_SUCCESS) {
 		LogCrit(COMPONENT_NFS_CB, "No clid record, code %d", code);
-		code = NFS_CB_CALL_ABORTED;
+		needs_revoke = true;
 		goto out;
 	}
 
@@ -1362,7 +1362,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	if (get_cb_chan_down(clid)) {
 		LogCrit(COMPONENT_NFS_CB,
 			"Call back channel down, not issuing a recall");
-		code = NFS_CB_CALL_ABORTED;
+		needs_revoke = true;
 		goto out;
 	}
 
@@ -1371,21 +1371,21 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 		LogCrit(COMPONENT_NFS_CB, "nfs_rpc_get_chan failed");
 		/* TODO: move this to nfs_rpc_get_chan ? */
 		set_cb_chan_down(clid, true);
-		code = NFS_CB_CALL_ABORTED;
+		needs_revoke = true;
 		goto out;
 	}
 	if (!chan->clnt) {
 		LogCrit(COMPONENT_NFS_CB, "nfs_rpc_get_chan failed (no clnt)");
 		set_cb_chan_down(clid, true);
-		code = NFS_CB_CALL_ABORTED;
+		needs_revoke = true;
 		goto out;
 	}
 	/* allocate a new call--freed in completion hook */
 	call = alloc_rpc_call();
 
 	if (!call) {
-		code = NFS_CB_CALL_ABORTED;
 		LogCrit(COMPONENT_NFS_CB, "Could not allocate rpc call");
+		needs_revoke = true;
 		goto out;
 	}
 
@@ -1406,7 +1406,7 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	maxfh = gsh_malloc(NFS4_FHSIZE); /* free in cb_completion_func() */
 	if (maxfh == NULL) {
 		LogDebug(COMPONENT_FSAL_UP, "FSAL_UP_DELEG: no mem, aborting.");
-		code = NFS_CB_CALL_ABORTED;
+		needs_revoke = true;
 		goto out;
 	}
 
@@ -1418,9 +1418,9 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	if (!nfs4_FSALToFhandle(&argop->nfs_cb_argop4_u.opcbrecall.fh,
 				entry->obj_handle,
 				exp)) {
-		code = NFS_CB_CALL_ABORTED;
 		LogCrit(COMPONENT_FSAL_UP,
 			"nfs4_FSALToFhandle failed, can not process recall");
+		needs_revoke = true;
 		goto out;
 	}
 
@@ -1440,40 +1440,15 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	p_cargs->deleg_entry = deleg_entry;
 	COPY_STATEID(&p_cargs->sd_stateid, deleg_entry->sle_state);
 	nfs_rpc_submit_call(call, p_cargs, NFS_RPC_CALL_NONE);
-	code = call->states;
-	maxfh = NULL; /* avoid free */
-	call = NULL;
+
+	needs_revoke = false;
 out:
 	/* nfs_client_id_get_confirmed() increments a ref to the client id */
 	if (clid != NULL)
                 dec_client_id_ref(clid);
 
-	switch (code) {
-	case NFS_CB_CALL_FINISHED:
-		break;
-	case NFS_CB_CALL_NONE:
-		break;
-	case NFS_CB_CALL_QUEUED:
-		break;
-	case NFS_CB_CALL_DISPATCH:
-		break;
-	case NFS_CB_CALL_ABORTED:
-		LogCrit(COMPONENT_NFS_CB, "Failed to recall, aborted!");
-		atomic_inc_uint32_t(&cl_stats->failed_recalls);
-		needs_revoke = TRUE;
-		break;
-	case NFS_CB_CALL_TIMEDOUT: /* network or client trouble */
-		LogCrit(COMPONENT_NFS_CB,
-			"Failed to recall due to timeout!");
-		atomic_inc_uint32_t(&cl_stats->failed_recalls);
-		needs_revoke = TRUE;
-		break;
-	default:
-		LogCrit(COMPONENT_NFS_CB, "delegrecall_one() failed.");
-		needs_revoke = TRUE;
-		break;
-	}
 	if (needs_revoke) {
+		atomic_inc_uint32_t(&cl_stats->failed_recalls);
 		if (maxfh)
 			gsh_free(maxfh);
 		if (call)
