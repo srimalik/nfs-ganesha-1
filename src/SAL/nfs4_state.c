@@ -82,7 +82,7 @@ static bool check_deleg_conflict(state_lock_entry_t *deleg_entry,
 	if (deleg_entry == NULL || candidate_data == NULL)
 		return true;
 
-	assert(state->state_type != STATE_TYPE_DELEG);
+	assert(deleg_entry->sle_state->state_type != STATE_TYPE_DELEG);
 	deleg_clientid =
 		deleg_entry->sle_owner->so_owner.so_nfs4_owner.so_clientrec->cid_clientid;
 	candidate_clientid =

@@ -65,9 +65,6 @@ void free_deleg_locked(state_lock_entry_t *deleg_lock, cache_entry_t *entry,
 		      struct fsal_export *export,
 		      struct req_op_context *fake_req_ctx)
 {
-	nfs_client_id_t *clientid =
-		deleg_lock->sle_owner->so_owner.so_nfs4_owner.so_clientrec;
-
 	state_unlock(entry, deleg_lock->sle_export,
 		     fake_req_ctx,
 		     deleg_lock->sle_owner,
