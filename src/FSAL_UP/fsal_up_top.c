@@ -1286,7 +1286,6 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			LogCrit(COMPONENT_NFS_V4,
 			"Revoking delegation(%p)", deleg_entry);
 			atomic_inc_uint32_t(&cl_stats->num_revokes);
-			PTHREAD_RWLOCK_unlock(&entry->state_lock);
 			rc = deleg_revoke(deleg_entry);
 			if (rc != STATE_SUCCESS) {
 				LogCrit(COMPONENT_NFS_V4,
@@ -1296,10 +1295,6 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 				LogDebug(COMPONENT_NFS_V4,
 					 "Delegation revoked(%p)", deleg_entry);
 			}
-			gsh_free(fh);
-			gsh_free(deleg_ctx);
-			free_rpc_call(call);
-			return 0;
 		} else
 			schedule_delegrecall_task(deleg_entry);
 	} else {
@@ -1458,7 +1453,15 @@ out:
 			LogCrit(COMPONENT_STATE, "Delegation will be revoked");
 			atomic_inc_uint32_t(&cl_stats->num_revokes);
 			/* state_lock held, can not revoke here */
-			schedule_delegrevoke_check(deleg_entry);
+			if (deleg_revoke(deleg_entry) != STATE_SUCCESS) {
+				LogDebug(COMPONENT_FSAL_UP,
+					 "Failed to revoke delegation(%p).",
+					 deleg_entry);
+			} else {
+				LogDebug(COMPONENT_FSAL_UP,
+					 "Delegation revoked(%p)",
+					 deleg_entry);
+			}
 		} else
 			schedule_delegrecall_task(deleg_entry);
 	}
@@ -1493,8 +1496,6 @@ static void delegrevoke_check(struct fridgethr_context *ctx)
 			if (eval_deleg_revoke(deleg_ctx->deleg_entry)) {
 				LogDebug(COMPONENT_STATE,
 					"Revoking delegation(%p)", deleg_entry);
-				/* Need to release the lock for state_unlock */
-				PTHREAD_RWLOCK_unlock(&entry->state_lock);
 				rc = deleg_revoke(deleg_entry);
 				if (rc != STATE_SUCCESS) {
 					LogCrit(COMPONENT_NFS_V4,
@@ -1505,8 +1506,6 @@ static void delegrevoke_check(struct fridgethr_context *ctx)
 						 "Delegation revoked(%p)",
 						 deleg_entry);
 				}
-				gsh_free(ctx->arg);
-				return;
 			} else {
 				LogFullDebug(COMPONENT_STATE,
 					     "Not revoking the delegation(%p)",
