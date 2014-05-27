@@ -131,17 +131,13 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 	}
 
 	pentry = data->current_entry;
+	res_DELEGRETURN4->status = NFS4ERR_BAD_STATEID;
 
 	PTHREAD_RWLOCK_wrlock(&pentry->state_lock);
 	glist_for_each_safe(glist, glistn, &pentry->object.file.deleg_list) {
 		found_entry = glist_entry(glist, state_lock_entry_t, sle_list);
-		if (found_entry == NULL)
-			continue;
+
 		LogDebug(COMPONENT_NFS_V4_LOCK, "found_entry %p", found_entry);
-		if (found_entry->sle_state->state_type != STATE_TYPE_DELEG) {
-			found_entry = NULL;
-			continue;
-		}
 		deleg_found = &found_entry->sle_state->state_data.deleg;
 		if (memcmp(&deleg_found->sd_stateid.other,
 			   &arg_DELEGRETURN4->deleg_stateid.other,
@@ -153,24 +149,19 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 		if (deleg_found->sd_stateid.seqid !=
 		    arg_DELEGRETURN4->deleg_stateid.seqid) {
 			LogFullDebug(COMPONENT_STATE, "But seqid doesn't match");
+			found_entry = NULL;
 			res_DELEGRETURN4->status = NFS4ERR_BAD_SEQID;
-			return res_DELEGRETURN4->status;
+			break;
 		}
-		break;
 	}
-	PTHREAD_RWLOCK_unlock(&pentry->state_lock);
 
 	if (found_entry == NULL) {
-		LogDebug(COMPONENT_NFS_V4_LOCK, "We did not find a delegation"
-			 " in the delegation lock list.");
-		res_DELEGRETURN4->status = NFS4ERR_BAD_STATEID;
+		PTHREAD_RWLOCK_unlock(&pentry->state_lock);
+		LogDebug(COMPONENT_NFS_V4_LOCK,
+			 "We did not find a delegation in the delegation lock list.");
 		return res_DELEGRETURN4->status;
 	}
 
-	pthread_mutex_lock(&found_entry->sle_mutex);
-	found_entry->sle_state->state_data.deleg.sd_state = DELEG_RETURNED;
-	pthread_mutex_unlock(&found_entry->sle_mutex);
-		
 	plock_owner = found_entry->sle_owner;
 
 	LogLock(COMPONENT_NFS_V4_LOCK, NIV_FULL_DEBUG, tag, data->current_entry,
@@ -179,7 +170,7 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 	/* Now we have a lock owner and a stateid.
 	 * Go ahead and push unlock into SAL (and FSAL).
 	 */
-	state_status = state_unlock(data->current_entry,
+	state_status = state_unlock_locked(data->current_entry,
 				    data->export,
 				    data->req_ctx,
 				    plock_owner,
@@ -197,13 +188,14 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 				    data->current_entry,
 				    resp,
 				    tag);
+		PTHREAD_RWLOCK_unlock(&pentry->state_lock);
 
 		return res_DELEGRETURN4->status;
 	}
 
 	/* Remove state entry and update stats */
 	deleg_heuristics_recall(found_entry);
-	state_del(pstate_found, false);
+	state_del_locked(pstate_found, found_entry->sle_entry);
 
 	/* Successful exit */
 	res_DELEGRETURN4->status = NFS4_OK;
@@ -217,6 +209,8 @@ int nfs4_op_delegreturn(struct nfs_argop4 *op, compound_data_t *data,
 			    data->current_entry,
 			    resp,
 			    tag);
+
+	PTHREAD_RWLOCK_unlock(&pentry->state_lock);
 
 	return res_DELEGRETURN4->status;
 }				/* nfs4_op_delegreturn */

@@ -503,8 +503,23 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 			  /* description of conflicting lock */
 			  fsal_lock_param_t *conflict,
 			  lock_type_t sle_type);
+state_status_t state_lock_locked(cache_entry_t *entry, exportlist_t *export,
+			  struct req_op_context *req_ctx, state_owner_t *owner,
+			  state_t *state, state_blocking_t blocking,
+			  state_block_data_t *block_data,
+			  fsal_lock_param_t *lock,
+			  /* owner that holds conflicting lock */
+			  state_owner_t **holder,
+			  /* description of conflicting lock */
+			  fsal_lock_param_t *conflict,
+			  lock_type_t sle_type);
 
 state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
+			    struct req_op_context *req_ctx,
+			    state_owner_t *owner, state_t *state,
+			    fsal_lock_param_t *lock, lock_type_t sle_type);
+
+state_status_t state_unlock_locked(cache_entry_t *entry, exportlist_t *export,
 			    struct req_op_context *req_ctx,
 			    state_owner_t *owner, state_t *state,
 			    fsal_lock_param_t *lock, lock_type_t sle_type);
@@ -591,8 +606,7 @@ void free_deleg_locked(state_lock_entry_t *deleg_lock, cache_entry_t *entry,
 		       struct req_op_context *fake_req_ctx);
 bool update_delegation_stats(state_lock_entry_t *deleg_entry);
 state_status_t delegrecall_impl(cache_entry_t *entry);
-state_status_t deleg_revoke(state_lock_entry_t *deleg_entry,
-			    cache_entry_t *entry, stateid4 *sd_stateid);
+state_status_t deleg_revoke(state_lock_entry_t *deleg_entry);
 
 #ifdef DEBUG_SAL
 void dump_all_states(void);
