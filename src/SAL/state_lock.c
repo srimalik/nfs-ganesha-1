@@ -2478,7 +2478,7 @@ state_status_t state_test(cache_entry_t *entry, exportlist_t *export,
  *
  * @return State status.
  */
-state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
+state_status_t state_lock_locked(cache_entry_t *entry, exportlist_t *export,
 			  struct req_op_context *req_ctx,
 			  state_owner_t *owner, state_t *state,
 			  state_blocking_t blocking,
@@ -2535,7 +2535,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 		return status;
 	}
 
-	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
 
 	if (blocking != STATE_NON_BLOCKING) {
 		/* First search for a blocked request. Client can ignore the
@@ -2555,7 +2554,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 			 * export.
 			 */
 			if (found_entry->sle_export != export) {
-				PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 				cache_inode_dec_pin_ref(entry, false);
 
@@ -2577,7 +2575,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 			if (different_lock(&found_entry->sle_lock, lock))
 				continue;
 
-			PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 			cache_inode_dec_pin_ref(entry, false);
 
@@ -2608,7 +2605,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 		 */
 		if (found_entry->sle_export != export
 		    && !different_owners(found_entry->sle_owner, owner)) {
-			PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 			cache_inode_dec_pin_ref(entry, false);
 
@@ -2682,7 +2678,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 						found_entry);
 				}
 
-				PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 				cache_inode_dec_pin_ref(entry, false);
 
@@ -2718,7 +2713,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 		/* Can't do async blocking lock in FSAL and have a conflict.
 		 * Return it. This is true for conflicting delegations as well.
 		 */
-		PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 		cache_inode_dec_pin_ref(entry, false);
 
@@ -2777,7 +2771,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 	    create_state_lock_entry(entry, export, STATE_NON_BLOCKING, owner,
 				    state, lock, sle_type);
 	if (!found_entry) {
-		PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 		cache_inode_dec_pin_ref(entry, false);
 
@@ -2850,7 +2843,6 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 		glist_add_tail(&entry->object.file.lock_list,
 			       &found_entry->sle_list);
 
-		PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 		cache_inode_dec_pin_ref(entry, false);
 
@@ -2869,10 +2861,26 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
 		remove_from_locklist(found_entry);
 	}
 
-	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 	cache_inode_dec_pin_ref(entry, false);
 
+	return status;
+}
+
+state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
+			  struct req_op_context *req_ctx,
+			  state_owner_t *owner, state_t *state,
+			  state_blocking_t blocking,
+			  state_block_data_t *block_data,
+			  fsal_lock_param_t *lock, state_owner_t **holder,
+			  fsal_lock_param_t *conflict, lock_type_t sle_type)
+{
+	state_status_t status;
+	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
+	status = state_lock_locked(entry, export, req_ctx, owner, state,
+				   blocking, block_data, lock, holder, conflict,
+				   sle_type);
+	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 	return status;
 }
 
@@ -2887,7 +2895,7 @@ state_status_t state_lock(cache_entry_t *entry, exportlist_t *export,
  * @param[in] lock     Lock description
  * @param[in] sle_type Lock type
  */
-state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
+state_status_t state_unlock_locked(cache_entry_t *entry, exportlist_t *export,
 			    struct req_op_context *req_ctx,
 			    state_owner_t *owner, state_t *state,
 			    fsal_lock_param_t *lock, lock_type_t sle_type)
@@ -2916,12 +2924,10 @@ state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
 	 * entry. And sle_lock.lock_start = 0 and sle_lock.lock_length = 0
 	 * nlm_lock implies remove all entries
 	 */
-	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
 
 	if (state && (state->state_type == STATE_TYPE_DELEG) &&
 	    glist_empty(&entry->object.file.deleg_list)) {
 		cache_inode_dec_pin_ref(entry, FALSE);
-		PTHREAD_RWLOCK_unlock(&entry->state_lock);
 		LogDebug(COMPONENT_STATE,
 			"Unlock success on file with no delegations");
 		return STATE_SUCCESS;
@@ -2936,7 +2942,6 @@ state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
 	} else {
 	/* If lock list is empty, there really isn't any work for us to do. */
 		if (glist_empty(&entry->object.file.lock_list)) {
-			PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 			cache_inode_dec_pin_ref(entry, false);
 			LogDebug(COMPONENT_STATE,
@@ -2979,7 +2984,6 @@ state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
 			 "Unable to remove lock from list for unlock, error=%s",
 			 state_err_str(status));
 
-		PTHREAD_RWLOCK_unlock(&entry->state_lock);
 
 		cache_inode_dec_pin_ref(entry, false);
 
@@ -3018,14 +3022,25 @@ state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
 
 	grant_blocked_locks(entry, req_ctx);
 
-	PTHREAD_RWLOCK_unlock(&entry->state_lock);
-
 	cache_inode_dec_pin_ref(entry, false);
 
 	if (isFullDebug(COMPONENT_STATE) && isFullDebug(COMPONENT_MEMLEAKS)
 	    && lock->lock_start == 0 && lock->lock_length == 0 && empty)
 		dump_all_locks("All locks (after unlock)");
 
+	return status;
+}
+
+state_status_t state_unlock(cache_entry_t *entry, exportlist_t *export,
+			    struct req_op_context *req_ctx,
+			    state_owner_t *owner, state_t *state,
+			    fsal_lock_param_t *lock, lock_type_t sle_type)
+{
+	state_status_t status;
+	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
+	status = state_unlock_locked(entry, export, req_ctx, owner, state, lock,
+				     sle_type);
+	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 	return status;
 }
 
