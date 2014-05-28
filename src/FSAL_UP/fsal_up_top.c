@@ -1185,6 +1185,7 @@ static bool handle_recall_response(state_lock_entry_t *deleg_entry,
 	case NFS4_OK:
 		LogDebug(COMPONENT_NFS_CB,
 		"Delegation successfully recalled");
+		needs_revoke = false;
 		clfl_stats->cfd_rs_time =
 					time(NULL);
 		break;
