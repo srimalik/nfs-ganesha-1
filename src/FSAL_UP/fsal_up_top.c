@@ -1072,7 +1072,6 @@ state_status_t notify_device(notify_deviceid_type4 notify_type,
 bool eval_deleg_revoke(state_lock_entry_t *deleg_entry)
 {
 	struct cf_deleg_stats *clfl_stats;
-	struct c_deleg_stats *cl_stats;
 	time_t curr_time;
 	time_t recall_success_time, first_recall_time;
 	uint32_t lease_lifetime = nfs_param.nfsv4_param.lease_lifetime;
@@ -1086,7 +1085,6 @@ bool eval_deleg_revoke(state_lock_entry_t *deleg_entry)
 
 	clfl_stats = &deleg_entry->sle_state->state_data.deleg.sd_clfile_stats;
 	clientid = deleg_entry->sle_owner->so_owner.so_nfs4_owner.so_clientrec;
-	cl_stats = &clientid->cid_deleg_stats;
 
 	curr_time = time(NULL);
 	recall_success_time = clfl_stats->cfd_rs_time;
@@ -1350,8 +1348,6 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	struct gsh_export *exp;
 	bool needs_revoke = FALSE;
 	struct delegrecall_context *p_cargs = NULL;
-	struct cf_deleg_stats *clfl_stats =
-		&deleg_entry->sle_state->state_data.deleg.sd_clfile_stats;
 	struct c_deleg_stats *cl_stats;
 	nfs_client_id_t *clientid;
 	clientid = deleg_entry->sle_owner->so_owner.so_nfs4_owner.so_clientrec;
