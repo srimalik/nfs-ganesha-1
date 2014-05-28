@@ -1228,11 +1228,8 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 	state_lock_entry_t *deleg_entry, *tdentry;
 	cache_entry_t *entry = deleg_ctx->entry;
 	struct glist_head *glist, *glist_n;
-	stateid4 ctx_stateid;
 	nfs_client_id_t *clientid;
 
-
-	memcpy(&ctx_stateid, &deleg_ctx->sd_stateid, sizeof(stateid4));
 
 	LogDebug(COMPONENT_NFS_CB, "%p %s", call,
 		 (hook == RPC_CALL_COMPLETE) ? "Success" : "Failed");
@@ -1243,7 +1240,7 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 	glist_for_each_safe(glist, glist_n, &entry->object.file.deleg_list) {
 		tdentry = glist_entry(glist, state_lock_entry_t, sle_list);
 		if (deleg_ctx->deleg_entry == tdentry &&
-		    SAME_STATEID(&ctx_stateid, tdentry->sle_state)) {
+		    SAME_STATEID(&deleg_ctx->sd_stateid, tdentry->sle_state)) {
 			deleg_entry = tdentry;
 			break;
 		}
@@ -1477,22 +1474,20 @@ out:
  * @param[in] entry File on which the delegation is held
  */
 
-static void delegrevoke_check(struct fridgethr_context *ctx)
+static void delegrevoke_check(void *ctx)
 {
 	uint32_t rc = 0;
 	struct glist_head *glist, *glist_n;
-	struct delegrecall_context *deleg_ctx = ctx->arg;
+	struct delegrecall_context *deleg_ctx = ctx;
 	cache_entry_t *entry = deleg_ctx->entry;
 	state_lock_entry_t *deleg_entry = NULL;
-	stateid4 ctx_stateid;
-
-	memcpy(&ctx_stateid, &deleg_ctx->sd_stateid, sizeof(stateid4));
 
 	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
 	glist_for_each_safe(glist, glist_n, &entry->object.file.deleg_list) {
 		deleg_entry = glist_entry(glist, state_lock_entry_t, sle_list);
 		if (deleg_ctx->deleg_entry == deleg_entry &&
-			SAME_STATEID(&ctx_stateid, deleg_entry->sle_state)) {
+			SAME_STATEID(&deleg_ctx->sd_stateid,
+				     deleg_entry->sle_state)) {
 			if (eval_deleg_revoke(deleg_ctx->deleg_entry)) {
 				LogDebug(COMPONENT_STATE,
 					"Revoking delegation(%p)", deleg_entry);
@@ -1520,25 +1515,23 @@ static void delegrevoke_check(struct fridgethr_context *ctx)
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 	if (!deleg_entry)
 		LogDebug(COMPONENT_NFS_CB, "Delgation is already returned");
-	gsh_free(ctx->arg);
+	gsh_free(ctx);
 	return;
 }
 
-static void delegrecall_task(struct fridgethr_context *ctx)
+static void delegrecall_task(void *ctx)
 {
 	struct glist_head *glist, *glist_n;
-	struct delegrecall_context *deleg_ctx = ctx->arg;
+	struct delegrecall_context *deleg_ctx = ctx;
 	cache_entry_t *entry = deleg_ctx->entry;
 	state_lock_entry_t *deleg_entry = NULL;
-	stateid4 ctx_stateid;
-
-	memcpy(&ctx_stateid, &deleg_ctx->sd_stateid, sizeof(stateid4));
 
 	PTHREAD_RWLOCK_wrlock(&entry->state_lock);
 	glist_for_each_safe(glist, glist_n, &entry->object.file.deleg_list) {
 		deleg_entry = glist_entry(glist, state_lock_entry_t, sle_list);
 		if (deleg_ctx->deleg_entry == deleg_entry &&
-			SAME_STATEID(&ctx_stateid, deleg_entry->sle_state)) {
+			SAME_STATEID(&deleg_ctx->sd_stateid,
+				     deleg_entry->sle_state)) {
 			delegrecall_one(deleg_entry);
 			break;
 		} else {
@@ -1548,7 +1541,7 @@ static void delegrecall_task(struct fridgethr_context *ctx)
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 	if (!deleg_entry)
 		LogDebug(COMPONENT_NFS_CB, "Delgation is already returned");
-	gsh_free(ctx->arg);
+	gsh_free(ctx);
 	return;
 }
 
@@ -1563,7 +1556,7 @@ static int schedule_delegrecall_task(state_lock_entry_t *deleg_entry)
 	ctx->deleg_entry = deleg_entry;
 	COPY_STATEID(&ctx->sd_stateid, deleg_entry->sle_state);
 
-	rc = fridgethr_submit(general_fridge, delegrecall_task, ctx);
+	rc = delayed_submit(delegrecall_task, ctx, NS_PER_SEC);
 	return rc;
 }
 
@@ -1578,7 +1571,7 @@ static int schedule_delegrevoke_check(state_lock_entry_t *deleg_entry)
 	ctx->deleg_entry = deleg_entry;
 	COPY_STATEID(&ctx->sd_stateid, deleg_entry->sle_state);
 
-	rc = fridgethr_submit(general_fridge, delegrevoke_check, ctx);
+	rc = delayed_submit(delegrevoke_check, ctx, NS_PER_SEC);
 	return rc;
 }
 
