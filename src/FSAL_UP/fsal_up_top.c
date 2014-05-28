@@ -1150,7 +1150,7 @@ static bool handle_badhandle_response(state_lock_entry_t *deleg_entry,
 		code = nfs_rpc_submit_call(call, p_cargs, NFS_RPC_CALL_INLINE);
 		atomic_inc_uint32_t(&cl_stats->tot_recalls);
 
-		if (call->stat != RPC_SUCCESS) {
+		if (call->stat != RPC_SUCCESS || code) {
 			LogEvent(COMPONENT_NFS_CB, "Callback channel down");
 			set_cb_chan_down(p_cargs->clid, true);
 			needs_revoke = true;
