@@ -49,8 +49,9 @@
 #include "delayed_exec.h"
 #include "export_mgr.h"
 
-static int schedule_delegrevoke_check(state_lock_entry_t *deleg_entry);
-static int schedule_delegrecall_task(state_lock_entry_t *deleg_entry);
+static int schedule_delegrevoke_check(struct delegrecall_context *ctx);
+static int schedule_delegrecall_task(struct delegrecall_context *ctx);
+
 /**
  * @brief Invalidate a cached entry
  *
@@ -1255,6 +1256,7 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 		LogDebug(COMPONENT_NFS_CB, "Delegation is already returned");
 		cache_inode_put(deleg_ctx->entry);
 		dec_client_id_ref(deleg_ctx->clid);
+		gsh_free(deleg_ctx);
 		goto out_free;
 	}
 
@@ -1303,18 +1305,18 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			}
 			cache_inode_put(deleg_ctx->entry);
 			dec_client_id_ref(clientid);
+			gsh_free(deleg_ctx);
 		} else
-			schedule_delegrecall_task(deleg_entry);
+			schedule_delegrecall_task(deleg_ctx);
 	} else {
 	/* recall was successful, we wait for delegreturn now or a timeout */
-		schedule_delegrevoke_check(deleg_entry);
+		schedule_delegrevoke_check(deleg_ctx);
 	}
 out_free:
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
 	fh = call->cbt.v_u.v4.args.argarray.argarray_val->
 				nfs_cb_argop4_u.opcbrecall.fh.nfs_fh4_val;
 	gsh_free(fh);
-	gsh_free(deleg_ctx);
 	free_rpc_call(call);
 	return 0; /*Always return zero, the delegation is recalled or revoked */
 }
@@ -1329,7 +1331,8 @@ out_free:
  * @param[in] entry       File on which the delegation is held
  */
 
-static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
+static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry,
+				struct delegrecall_context *p_cargs)
 {
 	char *maxfh = NULL;
 	uint32_t code = 0;
@@ -1338,7 +1341,6 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	nfs_cb_argop4 argop[1];
 	struct gsh_export *exp;
 	bool needs_revoke = false;
-	struct delegrecall_context *p_cargs = NULL;
 	struct c_deleg_stats *cl_stats;
 	struct cf_deleg_stats *clfl_stats = NULL;
 	nfs_client_id_t *clientid;
@@ -1426,16 +1428,26 @@ static uint32_t delegrecall_one(state_lock_entry_t *deleg_entry)
 	/* set completion hook */
 	call->call_hook = delegrecall_completion_func;
 
+	if (!p_cargs) {
+		p_cargs = gsh_malloc(sizeof(struct delegrecall_context));
+		if (!p_cargs) {
+			LogDebug(COMPONENT_FSAL_UP,
+				 "FSAL_UP_DELEG: no mem, aborting.");
+			needs_revoke = true;
+			goto out;
+		}
+
+		assert(p_cargs);
+
+		p_cargs->clid = clientid;
+		p_cargs->entry = entry;
+		p_cargs->deleg_entry = deleg_entry;
+		p_cargs->sd_stateid =
+			    deleg_entry->sle_state->state_data.deleg.sd_stateid;
+	}
+
 	/* call it (here, in current thread context)
 	* nfs_rpc_submit_call() always returns zero. ignore it. */
-	p_cargs = gsh_malloc(sizeof(struct delegrecall_context));
-	assert(p_cargs);
-
-	p_cargs->clid = clientid;
-	p_cargs->entry = entry;
-	p_cargs->deleg_entry = deleg_entry;
-	p_cargs->sd_stateid =
-			deleg_entry->sle_state->state_data.deleg.sd_stateid;
 	nfs_rpc_submit_call(call, p_cargs, NFS_RPC_CALL_NONE);
 
 	needs_revoke = false;
@@ -1464,8 +1476,10 @@ out:
 			}
 			cache_inode_put(entry);
 			dec_client_id_ref(clientid);
+			if (p_cargs)
+				gsh_free(p_cargs);
 		} else
-			schedule_delegrecall_task(deleg_entry);
+			schedule_delegrecall_task(p_cargs);
 	}
 
 	return code;
@@ -1509,11 +1523,12 @@ static void delegrevoke_check(void *ctx)
 				}
 				cache_inode_put(entry);
 				dec_client_id_ref(deleg_ctx->clid);
+				gsh_free(deleg_ctx);
 			} else {
 				LogFullDebug(COMPONENT_STATE,
 					     "Not revoking the delegation(%p)",
 					     deleg_entry);
-				schedule_delegrevoke_check(deleg_entry);
+				schedule_delegrevoke_check(deleg_ctx);
 			}
 			break;
 		} else {
@@ -1526,9 +1541,8 @@ static void delegrevoke_check(void *ctx)
 		LogDebug(COMPONENT_NFS_CB, "Delgation is already returned");
 		cache_inode_put(entry);
 		dec_client_id_ref(deleg_ctx->clid);
+		gsh_free(deleg_ctx);
 	}
-
-	gsh_free(ctx);
 
 	return;
 }
@@ -1548,7 +1562,7 @@ static void delegrecall_task(void *ctx)
 				&deleg_entry->
 				       sle_state->state_data.deleg.sd_stateid,
 					sizeof(stateid4))) {
-			delegrecall_one(deleg_entry);
+			delegrecall_one(deleg_entry, ctx);
 			break;
 		} else {
 			deleg_entry = NULL;
@@ -1559,36 +1573,26 @@ static void delegrecall_task(void *ctx)
 		LogDebug(COMPONENT_NFS_CB, "Delgation is already returned");
 		cache_inode_put(entry);
 		dec_client_id_ref(deleg_ctx->clid);
+		gsh_free(ctx);
 	}
-	gsh_free(ctx);
 	return;
 }
 
-static int schedule_delegrecall_task(state_lock_entry_t *deleg_entry)
+static int schedule_delegrecall_task(struct delegrecall_context *ctx)
 {
 	int rc = 0;
-	struct delegrecall_context *ctx =
-		gsh_malloc(sizeof(struct delegrecall_context));
-	assert(ctx);
 
-	ctx->entry = deleg_entry->sle_entry;
-	ctx->deleg_entry = deleg_entry;
-	ctx->sd_stateid = deleg_entry->sle_state->state_data.deleg.sd_stateid;
+	assert(ctx);
 
 	rc = delayed_submit(delegrecall_task, ctx, NS_PER_SEC);
 	return rc;
 }
 
-static int schedule_delegrevoke_check(state_lock_entry_t *deleg_entry)
+static int schedule_delegrevoke_check(struct delegrecall_context *ctx)
 {
 	int rc = 0;
-	struct delegrecall_context *ctx =
-		gsh_malloc(sizeof(struct delegrecall_context));
-	assert(ctx);
 
-	ctx->entry = deleg_entry->sle_entry;
-	ctx->deleg_entry = deleg_entry;
-	ctx->sd_stateid = deleg_entry->sle_state->state_data.deleg.sd_stateid;
+	assert(ctx);
 
 	rc = delayed_submit(delegrevoke_check, ctx, NS_PER_SEC);
 	return rc;
@@ -1633,7 +1637,7 @@ state_status_t delegrecall_impl(cache_entry_t *entry)
 
 		cache_inode_lru_ref(entry, LRU_FLAG_NONE);
 
-		rc = delegrecall_one(deleg_entry);
+		rc = delegrecall_one(deleg_entry, NULL);
 
 	}
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
