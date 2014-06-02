@@ -49,8 +49,10 @@
 #include "delayed_exec.h"
 #include "export_mgr.h"
 
-static int schedule_delegrevoke_check(struct delegrecall_context *ctx);
-static int schedule_delegrecall_task(struct delegrecall_context *ctx);
+static int schedule_delegrevoke_check(struct delegrecall_context *ctx,
+				      uint32_t delay);
+static int schedule_delegrecall_task(struct delegrecall_context *ctx,
+				     uint32_t delay);
 
 /**
  * @brief Invalidate a cached entry
@@ -1117,51 +1119,16 @@ bool eval_deleg_revoke(state_lock_entry_t *deleg_entry)
  */
 
 
-static bool handle_badhandle_response(state_lock_entry_t *deleg_entry,
-			     rpc_call_t *call,
-			     struct cf_deleg_stats *clfl_stats,
-			     struct c_deleg_stats *cl_stats,
-			     struct delegrecall_context *p_cargs)
+static bool handle_badhandle_response(struct delegrecall_context *p_cargs)
 {
 	int32_t code = 0;
-	bool needs_revoke = true;
 	int32_t recall_retry_delay =
 			nfs_param.nfsv4_param.deleg_recall_retry_delay;
-	int32_t recall_retry_count =
-			nfs_param.nfsv4_param.deleg_recall_retry_count;
 
-	while (recall_retry_count--) {
-		LogDebug(COMPONENT_NFS_CB, "Retrying recall(remaining %d)",
-					recall_retry_count);
-
-		sleep(recall_retry_delay);
-		/* reuse the same call */
-		call->states = NFS_CB_CALL_NONE;
-		call->call_hook = NULL;
-
-		(void)nfs_rpc_submit_call(call, p_cargs, NFS_RPC_CALL_INLINE);
-		atomic_inc_uint32_t(&cl_stats->tot_recalls);
-
-		if (call->stat != RPC_SUCCESS || code) {
-			LogEvent(COMPONENT_NFS_CB, "Callback channel down");
-			set_cb_chan_down(p_cargs->clid, true);
-			needs_revoke = true;
-			break;	/* do not retry if the channel is down */
-		} else {
-			if (call->cbt.v_u.v4.res.status == NFS4_OK) {
-				clfl_stats->cfd_rs_time = time(NULL);
-				needs_revoke = false;
-				break;
-			} else if (call->cbt.v_u.v4.res.status ==
-							NFS4ERR_BADHANDLE) {
-				continue;
-			} else {
-				needs_revoke = true;
-				break;
-			}
-		}
-	}
-	return needs_revoke;
+	LogDebug(COMPONENT_NFS_CB, "Retrying recall for delegation (%p)",
+					p_cargs->deleg_entry);
+	code = schedule_delegrecall_task(p_cargs, recall_retry_delay);
+	return !!code;
 }
 
 /**
@@ -1174,13 +1141,14 @@ static bool handle_badhandle_response(state_lock_entry_t *deleg_entry,
  *
  */
 
-static bool handle_recall_response(state_lock_entry_t *deleg_entry,
-			     rpc_call_t *call,
-			     struct cf_deleg_stats *clfl_stats,
-			     struct c_deleg_stats *cl_stats,
-			     struct delegrecall_context *p_cargs)
+static bool handle_recall_response(struct delegrecall_context *p_cargs,
+				   rpc_call_t *call)
 {
 	bool needs_revoke = false;
+	state_lock_entry_t *deleg_entry = p_cargs->deleg_entry;
+
+	struct cf_deleg_stats *clfl_stats =
+		&deleg_entry->sle_state->state_data.deleg.sd_clfile_stats;
 
 	switch (call->cbt.v_u.v4.res.status) {
 	case NFS4_OK:
@@ -1193,8 +1161,7 @@ static bool handle_recall_response(state_lock_entry_t *deleg_entry,
 	case NFS4ERR_BADHANDLE:
 		LogDebug(COMPONENT_NFS_CB,
 			 "NFS4ERR_BADHANDLE response, retrying");
-		needs_revoke = handle_badhandle_response(deleg_entry, call,
-					clfl_stats, cl_stats, p_cargs);
+		needs_revoke = handle_badhandle_response(p_cargs);
 		break;
 	default:
 		/* some other NFS error, consider the recall failed */
@@ -1272,10 +1239,7 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			set_cb_chan_down(deleg_ctx->clid, true);
 			needs_revoke = true;
 		} else
-			needs_revoke = handle_recall_response(deleg_entry,
-							      call, clfl_stats,
-							      cl_stats,
-							      deleg_ctx);
+			needs_revoke = handle_recall_response(deleg_ctx, call);
 		break;
 	default:
 		LogDebug(COMPONENT_NFS_CB, "%p unknown hook %d", call, hook);
@@ -1301,10 +1265,10 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			dec_client_id_ref(clientid);
 			gsh_free(deleg_ctx);
 		} else
-			schedule_delegrecall_task(deleg_ctx);
+			schedule_delegrecall_task(deleg_ctx, 1);
 	} else {
 	/* recall was successful, we wait for delegreturn now or a timeout */
-		schedule_delegrevoke_check(deleg_ctx);
+		schedule_delegrevoke_check(deleg_ctx, 1);
 	}
 out_free:
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
@@ -1454,7 +1418,6 @@ out:
 		if (eval_deleg_revoke(deleg_entry)) {
 			LogCrit(COMPONENT_STATE, "Delegation will be revoked");
 			atomic_inc_uint32_t(&cl_stats->num_revokes);
-			/* state_lock held, can not revoke here */
 			if (deleg_revoke(deleg_entry) != STATE_SUCCESS) {
 				LogDebug(COMPONENT_FSAL_UP,
 					 "Failed to revoke delegation(%p).",
@@ -1469,7 +1432,7 @@ out:
 			if (p_cargs)
 				gsh_free(p_cargs);
 		} else
-			schedule_delegrecall_task(p_cargs);
+			schedule_delegrecall_task(p_cargs, 1);
 	}
 
 	return code;
@@ -1516,7 +1479,7 @@ static void delegrevoke_check(void *ctx)
 				LogFullDebug(COMPONENT_STATE,
 					     "Not revoking the delegation(%p)",
 					     deleg_entry);
-				schedule_delegrevoke_check(deleg_ctx);
+				schedule_delegrevoke_check(deleg_ctx, 1);
 			}
 			break;
 		} else {
@@ -1564,23 +1527,25 @@ static void delegrecall_task(void *ctx)
 	return;
 }
 
-static int schedule_delegrecall_task(struct delegrecall_context *ctx)
+static int schedule_delegrecall_task(struct delegrecall_context *ctx,
+				     uint32_t delay)
 {
 	int rc = 0;
 
 	assert(ctx);
 
-	rc = delayed_submit(delegrecall_task, ctx, NS_PER_SEC);
+	rc = delayed_submit(delegrecall_task, ctx, delay * NS_PER_SEC);
 	return rc;
 }
 
-static int schedule_delegrevoke_check(struct delegrecall_context *ctx)
+static int schedule_delegrevoke_check(struct delegrecall_context *ctx,
+				      uint32_t delay)
 {
 	int rc = 0;
 
 	assert(ctx);
 
-	rc = delayed_submit(delegrevoke_check, ctx, NS_PER_SEC);
+	rc = delayed_submit(delegrevoke_check, ctx, delay * NS_PER_SEC);
 	return rc;
 }
 
