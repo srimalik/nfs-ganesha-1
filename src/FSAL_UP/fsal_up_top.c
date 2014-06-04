@@ -1188,7 +1188,6 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 {
 	char *fh = NULL;
 	bool needs_revoke = false;
-	state_status_t rc = STATE_SUCCESS;
 	struct delegrecall_context *deleg_ctx =
 				(struct delegrecall_context *) arg;
 	struct c_deleg_stats *cl_stats = NULL;
@@ -1250,8 +1249,7 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			LogCrit(COMPONENT_NFS_V4,
 			"Revoking delegation(%p)", deleg_entry);
 			atomic_inc_uint32_t(&cl_stats->num_revokes);
-			rc = deleg_revoke(deleg_entry);
-			if (rc != STATE_SUCCESS) {
+			if (deleg_revoke(deleg_entry) != STATE_SUCCESS) {
 				LogCrit(COMPONENT_NFS_V4,
 					"Delegation could not be revoked(%p)",
 					deleg_entry);
@@ -1263,10 +1261,36 @@ static int32_t delegrecall_completion_func(rpc_call_t *call,
 			dec_client_id_ref(clientid);
 			gsh_free(deleg_ctx);
 		} else
-			schedule_delegrecall_task(deleg_ctx, 1);
+			if(schedule_delegrecall_task(deleg_ctx, 1)) {
+				if (deleg_revoke(deleg_entry) !=
+								STATE_SUCCESS) {
+					LogCrit(COMPONENT_NFS_V4,
+						"Delegation could not be revoked(%p)",
+						deleg_entry);
+				} else {
+					LogDebug(COMPONENT_NFS_V4,
+						 "Delegation revoked(%p)",
+						 deleg_entry);
+				}
+				cache_inode_put(deleg_ctx->entry);
+				dec_client_id_ref(clientid);
+				gsh_free(deleg_ctx);
+			}
 	} else {
 	/* recall was successful, we wait for delegreturn now or a timeout */
-		schedule_delegrevoke_check(deleg_ctx, 1);
+		if (schedule_delegrevoke_check(deleg_ctx, 1)) {
+			if (deleg_revoke(deleg_entry) != STATE_SUCCESS) {
+				LogCrit(COMPONENT_NFS_V4,
+					"Delegation could not be revoked(%p)",
+					deleg_entry);
+			} else {
+				LogDebug(COMPONENT_NFS_V4,
+					 "Delegation revoked(%p)", deleg_entry);
+			}
+			cache_inode_put(deleg_ctx->entry);
+			dec_client_id_ref(clientid);
+			gsh_free(deleg_ctx);
+		}
 	}
 out_free:
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
@@ -1282,6 +1306,7 @@ out_free:
  *
  * This function sends a cb_recall for one delegation, the caller has to lock
  * cache_entry->state_lock before calling this function.
+ * refs to client and cache entry will be released by after revoke.
  *
  * @param[in] deleg_entry Lock entry covering the delegation
  * @param[in] entry       File on which the delegation is held
@@ -1427,6 +1452,9 @@ out:
 			code = schedule_delegrecall_task(p_cargs, 1);
 	}
 
+	if (code && p_cargs)
+			gsh_free(p_cargs);
+
 	return code;
 }
 
@@ -1439,7 +1467,6 @@ out:
 
 static void delegrevoke_check(void *ctx)
 {
-	uint32_t rc = 0;
 	struct glist_head *glist, *glist_n;
 	struct delegrecall_context *deleg_ctx = ctx;
 	cache_entry_t *entry = deleg_ctx->entry;
@@ -1454,8 +1481,8 @@ static void delegrevoke_check(void *ctx)
 			if (eval_deleg_revoke(deleg_ctx->deleg_entry)) {
 				LogDebug(COMPONENT_STATE,
 					"Revoking delegation(%p)", deleg_entry);
-				rc = deleg_revoke(deleg_entry);
-				if (rc != STATE_SUCCESS) {
+				if (deleg_revoke(deleg_entry) !=
+							STATE_SUCCESS) {
 					LogCrit(COMPONENT_NFS_V4,
 					  "Delegation could not be revoked(%p)",
 						deleg_entry);
@@ -1471,7 +1498,21 @@ static void delegrevoke_check(void *ctx)
 				LogFullDebug(COMPONENT_STATE,
 					     "Not revoking the delegation(%p)",
 					     deleg_entry);
-				schedule_delegrevoke_check(deleg_ctx, 1);
+				if (schedule_delegrevoke_check(deleg_ctx, 1)) {
+					if (deleg_revoke(deleg_entry) !=
+								STATE_SUCCESS) {
+						LogCrit(COMPONENT_NFS_V4,
+						  "Delegation could not be revoked(%p)",
+							deleg_entry);
+					} else {
+						LogDebug(COMPONENT_NFS_V4,
+							 "Delegation revoked(%p)",
+							 deleg_entry);
+					}
+					cache_inode_put(entry);
+					dec_client_id_ref(deleg_ctx->clid);
+					gsh_free(deleg_ctx);
+				}
 			}
 			break;
 		} else {
@@ -1582,8 +1623,23 @@ state_status_t delegrecall_impl(cache_entry_t *entry)
 
 		rc = delegrecall_one(deleg_entry, NULL);
 
-		if (rc)
-			LogCrit(COMPONENT_FSAL_UP, "delegrecall_one failed");
+		/* rc != 0: the callee has not released the refs */
+		if (rc) {
+			LogCrit(COMPONENT_FSAL_UP,
+				"delegrecall_one failed for(%p), revoking now",
+				deleg_entry);
+			if (deleg_revoke(deleg_entry) != STATE_SUCCESS) {
+				LogCrit(COMPONENT_NFS_V4,
+				  "Delegation could not be revoked(%p)",
+					deleg_entry);
+			} else {
+				LogDebug(COMPONENT_NFS_V4,
+					 "Delegation revoked(%p)",
+					 deleg_entry);
+			}
+			cache_inode_put(entry);
+			dec_client_id_ref(clid);
+		}
 
 	}
 	PTHREAD_RWLOCK_unlock(&entry->state_lock);
