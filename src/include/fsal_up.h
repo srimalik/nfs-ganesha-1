@@ -299,5 +299,11 @@ struct delegrecall_context {
 	stateid4 sd_stateid;
 };
 
+enum recall_resp_action {
+	RECALL_SCHED,
+	REVOKE_SCHED,
+	REVOKE_SYNC
+};
+
 #endif /* FSAL_UP_H */
 /** @} */
