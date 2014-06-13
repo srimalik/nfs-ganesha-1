@@ -412,9 +412,6 @@ static bool idmapname2id(char *name, size_t len, uint32_t *id,
 	if (rc == 0) {
 #ifdef _HAVE_GSSAPI
 		if (!group) {
-			/* nfs4_gss_princ_to_ids takes the unqualified
-			   name. */
-			*at = '\0';
 			rc = nfs4_gss_princ_to_ids("krb5", name, id, gid);
 			if (rc == 0)
 				*got_gid = true;
