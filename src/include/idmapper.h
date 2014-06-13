@@ -75,8 +75,8 @@ void idmapper_clear_cache(void);
 bool xdr_encode_nfs4_owner(XDR *, uid_t);
 bool xdr_encode_nfs4_group(XDR *, gid_t);
 
-bool name2uid(const struct gsh_buffdesc *, uid_t *, const uid_t);
-bool name2gid(const struct gsh_buffdesc *, gid_t *, const gid_t);
+bool name2uid(const struct gsh_buffdesc *, uid_t *);
+bool name2gid(const struct gsh_buffdesc *, gid_t *);
 
 #ifdef _HAVE_GSSAPI
 #ifdef _MSPAC_SUPPORT

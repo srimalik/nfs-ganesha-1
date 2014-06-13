@@ -281,12 +281,10 @@ bool xdr_encode_nfs4_group(XDR *xdrs, gid_t gid)
  * @return true on success, false on just phoning it in.
  */
 
-static bool atless2id(char *name, size_t len, uint32_t *id,
-		      const uint32_t anon)
+static bool atless2id(char *name, size_t len, uint32_t *id)
 {
 	if ((len == 6) && (!memcmp(name, "nobody", 6))) {
-		*id = anon;
-		return true;
+		return false;
 	} else if (nfs_param.nfsv4_param.allow_numeric_owners) {
 		char *end = NULL;
 		*id = strtol(name, &end, 10);
@@ -314,7 +312,7 @@ static bool atless2id(char *name, size_t len, uint32_t *id,
  * @return true on success, false not making the grade
  */
 static bool pwentname2id(char *name, size_t len, uint32_t *id,
-			 const uint32_t anon, bool group, gid_t *gid,
+			 bool group, gid_t *gid,
 			 bool *got_gid, char *at)
 {
 	if (at != NULL) {
@@ -400,7 +398,7 @@ static bool pwentname2id(char *name, size_t len, uint32_t *id,
  */
 
 static bool idmapname2id(char *name, size_t len, uint32_t *id,
-			 const uint32_t anon, bool group, gid_t *gid,
+			 bool group, gid_t *gid,
 			 bool *got_gid, char *at)
 {
 #ifdef USE_NFSIDMAP
@@ -412,8 +410,8 @@ static bool idmapname2id(char *name, size_t len, uint32_t *id,
 		rc = nfs4_name_to_uid(name, id);
 
 	if (rc == 0) {
-		if (!group) {
 #ifdef _HAVE_GSSAPI
+		if (!group) {
 			/* nfs4_gss_princ_to_ids takes the unqualified
 			   name. */
 			*at = '\0';
@@ -450,8 +448,7 @@ static bool idmapname2id(char *name, size_t len, uint32_t *id,
  * @return true if successful, false otherwise
  */
 
-static bool name2id(const struct gsh_buffdesc *name, uint32_t *id, bool group,
-		    const uint32_t anon)
+static bool name2id(const struct gsh_buffdesc *name, uint32_t *id, bool group)
 {
 	bool success;
 
@@ -480,28 +477,28 @@ static bool name2id(const struct gsh_buffdesc *name, uint32_t *id, bool group,
 
 		if (at == NULL) {
 			if (pwentname2id
-			    (namebuff, name->len, id, anon, group, &gid,
+			    (namebuff, name->len, id, group, &gid,
 			     &got_gid, NULL))
 				looked_up = true;
-			else if (atless2id(namebuff, name->len, id, anon))
+			else if (atless2id(namebuff, name->len, id))
 				looked_up = true;
 			else
 				return false;
 		} else if (nfs_param.nfsv4_param.use_getpwnam) {
 			looked_up =
-			    pwentname2id(namebuff, name->len, id, anon, group,
+			    pwentname2id(namebuff, name->len, id, group,
 					 &gid, &got_gid, at);
 		} else {
 			looked_up =
-			    idmapname2id(namebuff, name->len, id, anon, group,
+			    idmapname2id(namebuff, name->len, id, group,
 					 &gid, &got_gid, at);
 		}
 
 		if (!looked_up) {
 			LogInfo(COMPONENT_IDMAPPER,
-				"All lookups failed for %s, using anonymous.",
+				"All lookups failed for %s.",
 				namebuff);
-			*id = anon;
+				return false;
 		}
 
 		PTHREAD_RWLOCK_wrlock(group ? &idmapper_group_lock :
@@ -534,9 +531,9 @@ static bool name2id(const struct gsh_buffdesc *name, uint32_t *id, bool group,
  * @return true if successful, false otherwise
  *
  */
-bool name2uid(const struct gsh_buffdesc *name, uid_t *uid, const uid_t anon)
+bool name2uid(const struct gsh_buffdesc *name, uid_t *uid)
 {
-	return name2id(name, uid, false, anon);
+	return name2id(name, uid, false);
 }
 
 /**
@@ -548,9 +545,9 @@ bool name2uid(const struct gsh_buffdesc *name, uid_t *uid, const uid_t anon)
  *
  * @return true  if successful, false otherwise
  */
-bool name2gid(const struct gsh_buffdesc *name, gid_t *gid, const gid_t anon)
+bool name2gid(const struct gsh_buffdesc *name, gid_t *gid)
 {
-	return name2id(name, gid, true, anon);
+	return name2id(name, gid, true);
 }
 
 #ifdef _HAVE_GSSAPI
