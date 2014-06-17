@@ -553,7 +553,7 @@ nfsstat4 nfs4_Check_Stateid(stateid4 *stateid, cache_entry_t *entry,
 		/* Release the clientid reference we just acquired. */
 		dec_client_id_ref(pclientid);
 
-		status = NFS4ERR_BAD_STATEID;
+		status = NFS4ERR_DELEG_REVOKED;
 		goto failure;
 	}
 
