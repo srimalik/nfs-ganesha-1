@@ -134,6 +134,9 @@ int uid2name(char *name, uid_t * puid, size_t namesize)
 
   int rc;
 
+  if (nfs_param.nfsv4_param.return_numeric_ids)
+        goto v3compat;
+
   if(!nfsidmap_set_conf())
     {
       LogCrit(COMPONENT_IDMAPPER,
@@ -183,20 +186,13 @@ int uid2name(char *name, uid_t * puid, size_t namesize)
       return 1;
     }
 
-v3compat:
-  /* return the int value as string no leading zeros and with no '@'
-   */ 
-  snprintf(name, NFS4_MAX_DOMAIN_LEN, "%u", *puid);
-  LogFullDebug(COMPONENT_IDMAPPER,
-               "uid2name: v3compat: Converting uid %u to name string %s",
-               *puid, name);
-
-  return 1;
-
 #else
   struct passwd p;
   struct passwd *pp;
   char buff[NFS4_MAX_DOMAIN_LEN];
+
+  if (nfs_param.nfsv4_param.return_numeric_ids)
+        goto v3compat;
 
   if(unamemap_get(*puid, name, namesize) == ID_MAPPER_SUCCESS)
     {
@@ -237,6 +233,16 @@ v3compat:
 
   return 1;
 #endif                          /* _USE_NFSIDMAP */
+
+v3compat:
+  /* return the int value as string no leading zeros and with no '@'
+   */ 
+  snprintf(name, NFS4_MAX_DOMAIN_LEN, "%u", *puid);
+  LogFullDebug(COMPONENT_IDMAPPER,
+               "uid2name: v3compat: Converting uid %u to name string %s",
+               *puid, name);
+  return 1;
+
 }                               /* uid2name */
 
 /**
@@ -614,6 +620,9 @@ int gid2name(char *name, gid_t * pgid, size_t namesize)
 #endif
   static char buff[NFS4_MAX_DOMAIN_LEN]; /* Working area for getgrnam_r */
 #endif
+
+  if (nfs_param.nfsv4_param.return_numeric_ids)
+        goto v3compat;
 
 #ifdef _USE_NFSIDMAP
   int rc;

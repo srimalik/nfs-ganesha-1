@@ -1266,6 +1266,10 @@ int nfs_read_version4_conf(config_file_t in_config, nfs_version4_parameter_t * p
         {
           pparam->return_bad_stateid = StrToBoolean(key_value);
         }
+      else if(!strcasecmp(key_name, "Return_Numeric_Ids"))
+        {
+          pparam->return_numeric_ids = StrToBoolean(key_value);
+        }
       else
         {
           LogCrit(COMPONENT_CONFIG,

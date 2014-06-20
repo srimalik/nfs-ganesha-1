@@ -311,6 +311,7 @@ typedef struct nfs_version4_parameter__
   unsigned int fh_expire;
   unsigned int returns_err_fh_expired;
   unsigned int return_bad_stateid;
+  unsigned int return_numeric_ids; /* Use numeric IDs in getattr response */
   char domainname[NFS4_MAX_DOMAIN_LEN];
   char idmapconf[MAXPATHLEN];
 } nfs_version4_parameter_t;

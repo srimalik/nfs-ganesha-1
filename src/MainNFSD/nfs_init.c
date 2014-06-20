@@ -398,6 +398,7 @@ void nfs_set_param_default()
   nfs_param.nfsv4_param.fh_expire = FALSE;
   nfs_param.nfsv4_param.returns_err_fh_expired = TRUE;
   nfs_param.nfsv4_param.return_bad_stateid = TRUE;
+  nfs_param.nfsv4_param.return_numeric_ids = FALSE;
   if(strmaxcpy(nfs_param.nfsv4_param.domainname,
                DEFAULT_DOMAIN,
                sizeof(nfs_param.nfsv4_param.domainname)) == -1)
