@@ -989,7 +989,8 @@ int32_t nfs_rpc_submit_call(rpc_call_t *call, void *completion_arg,
 int32_t nfs_rpc_dispatch_call(rpc_call_t *call, uint32_t flags)
 {
 	int code = 0;
-	struct timeval CB_TIMEOUT = { 15, 0 };	/* XXX */
+	uint32_t cb_timeout = nfs_param.nfsv4_param.rpc_cb_timeout;
+	struct timeval CB_TIMEOUT = { cb_timeout, 0 };	/* XXX */
 	rpc_call_hook hook_status = RPC_CALL_COMPLETE;
 
 	/* send the call, set states, wake waiters, etc */

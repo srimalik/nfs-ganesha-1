@@ -374,7 +374,7 @@ typedef struct nfs_core_param {
 /**
  * @brief Default value of deleg_recall_retry_delay.
  */
-#define DELEG_RECALL_RETRY_DELAY_DEFAULT 1
+#define RPC_CALLBACK_TIMEOUT_DEFAULT 5
 
 typedef struct nfs_version4_parameter {
 	/** Whether to disable the NFSv4 grace period.  Defaults to
@@ -408,8 +408,8 @@ typedef struct nfs_version4_parameter {
 	/** Whether to allow delegations. Defaults to false and settable
 	    with Delegations */
 	bool allow_delegations;
-	/** Delay after which server will retry a recall in case of failures */
-	uint32_t deleg_recall_retry_delay;
+	/** RPC callback timeout */
+	uint32_t rpc_cb_timeout;
 } nfs_version4_parameter_t;
 
 /** @} */
