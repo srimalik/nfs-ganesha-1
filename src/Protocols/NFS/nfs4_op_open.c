@@ -1256,6 +1256,12 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 	case CLAIM_DELEGATE_PREV:
 	case CLAIM_DELEGATE_CUR:
 		if (claim == CLAIM_DELEGATE_PREV) {
+			/* FIXME: Remove this wehn we have full support
+			 * of CLAIM_DELEGATE_PREV and delegpurge operations
+			 */
+			res_OPEN4->status = NFS4ERR_NOTSUPP;
+			goto out;
+
 			/* Read and validate oldname and newname from
 			 * uft8 strings. */
 			utfname =
