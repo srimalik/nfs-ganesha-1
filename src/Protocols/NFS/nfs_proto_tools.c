@@ -239,6 +239,35 @@ bool nfs_RetryableError(cache_inode_status_t cache_status)
 		 cache_status, __LINE__);
 	return false;
 }
+/**
+ * @brief Returns the maximun attribute index possbile for a 4.x protocol.
+ *
+ * This function returns the maximun attribute index possbile for a
+ * 4.x protocol.
+ * returns -1 if the protocol is not recognized.
+ *
+ * @param minorversion[IN] input minorversion of the protocol.
+ *
+ * @return the max index possbile for the minorversion, -1 if minorversion is
+ * not recognized.
+ *
+ */
+
+static inline int nfs4_max_attr_index(enum nfs4_minor_vers minorversion)
+{
+	switch (minorversion) {
+	case NFS4_MINOR_VERS_0:
+		return FATTR4_MOUNTED_ON_FILEID;
+	case NFS4_MINOR_VERS_1:
+		return FATTR4_FS_CHARSET_CAP;
+	case NFS4_MINOR_VERS_2:
+		return FATTR4_CHANGE_SEC_LABEL;
+	}
+	/* Should never reach here */
+	LogFatal(COMPONENT_NFS_V4, "Unrecognized NFSv4 minor version");
+	return -1;
+}
+
 
 /* NFSv4.0+ Attribute management
  * XDR encode/decode/compare functions for FSAL <-> Fattr4 translations
@@ -261,9 +290,14 @@ static fattr_xdr_result encode_supported_attrs(XDR *xdr,
 {
 	struct bitmap4 bits;
 	int attr, offset;
+	int max_attr_idx;
 
 	memset(&bits, 0, sizeof(bits));
-	for (attr = FATTR4_SUPPORTED_ATTRS; attr <= FATTR4_CHANGE_SEC_LABEL;
+	max_attr_idx = args->data ?
+		       nfs4_max_attr_index(args->data->minorversion) :
+		       FATTR4_CHANGE_SEC_LABEL;
+
+	for (attr = FATTR4_SUPPORTED_ATTRS; attr <= max_attr_idx;
 	     attr++) {
 		if (fattr4tab[attr].supported) {
 			bool res = set_attribute_in_bitmap(&bits, attr);
@@ -3232,6 +3266,7 @@ int nfs4_FSALattr_To_Fattr(struct xdr_attrs_args *args, struct bitmap4 *Bitmap,
 			   fattr4 *Fattr)
 {
 	int attribute_to_set = 0;
+	int max_attr_idx;
 	u_int LastOffset;
 	fsal_dynamicfsinfo_t dynamicinfo;
 	XDR attr_body;
@@ -3248,6 +3283,11 @@ int nfs4_FSALattr_To_Fattr(struct xdr_attrs_args *args, struct bitmap4 *Bitmap,
 	if (Fattr->attr_vals.attrlist4_val == NULL)
 		return -1;
 
+	max_attr_idx = args->data ?
+		       nfs4_max_attr_index(args->data->minorversion) :
+		       FATTR4_CHANGE_SEC_LABEL;
+	LogFullDebug(COMPONENT_NFS_V4, "Maximum allowed attr index = %d",
+		 max_attr_idx);
 
 	LastOffset = 0;
 	memset(&attr_body, 0, sizeof(attr_body));
@@ -3261,7 +3301,7 @@ int nfs4_FSALattr_To_Fattr(struct xdr_attrs_args *args, struct bitmap4 *Bitmap,
 	     attribute_to_set != -1;
 	     attribute_to_set =
 	     next_attr_from_bitmap(Bitmap, attribute_to_set)) {
-		if (attribute_to_set > FATTR4_CHANGE_SEC_LABEL)
+		if (attribute_to_set > max_attr_idx)
 			break;	/* skip out of bounds */
 
 		xdr_res = fattr4tab[attribute_to_set].encode(&attr_body, args);
